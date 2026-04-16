@@ -229,6 +229,10 @@ Possible directions (not exhaustive — Denario should feel free to propose nove
 
 
 
+Human feedback:
+Avoid machine learning approaches. Focus on classical statistical methods for cluster finding — for example matched filters, optimal filters, Bayesian detection, or classical component separation techniques. The idea should be grounded in well-established CMB/SZ methodology.
+
+Take into account the human feedback when generating ideas. The feedback should guide your idea generation process, helping you focus on specific aspects, approaches, or directions that the human has indicated.
 
 
 
@@ -244,25 +248,35 @@ In <IDEAS>, put the ideas you have generated.
 ###### PROMPT ENDS ########
 
 \begin{IDEAS}
-1. **Cross-Frequency Morphological Correlation Analysis**: Investigate the spatial scale at which the CIB and tSZ signals decorrelate. By analyzing the scale-dependent cross-correlation coefficient, we aim to determine the optimal spatial filtering required to isolate the tSZ signal from CIB-dominated high-frequency maps.
+1. **Adaptive Matched Filter with Local CIB Estimation**
+Develop a spatially varying matched filter that dynamically estimates the local CIB power spectrum within each 5° patch. By adjusting the filter kernel based on local CIB intensity rather than a global average, this approach aims to reduce false-positive detections in regions of high infrared foreground contamination.
 
-2. **Non-Gaussianity Mapping of the kSZ Effect**: Explore the spatial distribution of the kinetic Sunyaev-Zel'dovich effect to identify non-Gaussian signatures in the velocity field of the large-scale structure. This research focuses on whether the kSZ signal can act as a tracer for cosmic web filaments that are otherwise obscured by the CMB.
+2. **Bayesian Posterior Mapping for tSZ Reconstruction**
+Construct a Bayesian framework to estimate the posterior distribution of the Compton-y parameter given the multi-frequency observational constraints. By assuming a Gaussian prior on the CMB and CIB components, this method seeks to isolate the tSZ signal by marginalizing over the stochastic noise and foreground spectral signatures.
 
-3. **Transfer Function Characterization for Blind Source Separation**: Determine the effective transfer function of standard component-separation algorithms when applied to highly non-stationary noise environments. The objective is to define the limits of linear reconstruction for the tSZ signal in the presence of correlated SO-LAT noise.
+3. **Optimal Multi-Frequency Weighting via Internal Linear Combination (ILC)**
+Extend the classical ILC method to produce a minimum-variance map specifically optimized for the tSZ spectral signature. By imposing a constrained minimization of the total variance while preserving the tSZ signal, this technique aims to suppress both CIB and kSZ foregrounds without requiring an explicit model for the cluster spatial profile.
 
-4. **Baryonic Feedback Signatures in tSZ-CIB Residuals**: Assess the impact of AGN feedback physics—modeled in the FLAMINGO simulation—on the small-scale power spectrum of the tSZ signal. The goal is to constrain the relationship between cluster gas pressure profiles and the surrounding infrared-emitting galaxy populations.
+4. **Cross-Spectral Peak Detection for Cluster Validation**
+Utilize cross-correlation statistics between high-frequency (CIB-dominated) and low-frequency (tSZ-dominated) maps to act as a veto mechanism for cluster candidates. This statistical filter identifies if a potential cluster peak is likely a real physical structure or a chance alignment of CIB fluctuations, thereby improving the purity of the cluster catalog.
 
-5. **Information-Theoretic Limits of Cluster Mass Estimation**: Quantify the fundamental information loss when inferring cluster mass from integrated Compton-Y in the presence of realistic multi-frequency noise. This objective seeks to identify the "information ceiling" for mass calibration before reaching the beam-suppressed regime.
+5. **Optimal Aperture Photometry for Integrated-Y Recovery**
+Investigate the dependency of integrated Compton-Y recovery on aperture size and filter shape within a classical frequentist framework. By modeling the noise covariance across different frequencies, this study aims to define an optimal aperture scale that minimizes the variance of the mass estimate for clusters of varying angular sizes.
 
-6. **Gradient-Based Feature Extraction for Cluster Detection**: Evaluate the efficacy of using the gradient field of the sky maps, rather than raw pixel intensities, to distinguish tSZ-induced cluster signals from CMB primary anisotropies. This approach aims to reduce false-positive detections caused by accidental CMB temperature fluctuations.
+6. **Wavelet-Based Multiscale SZ Decomposition**
+Decompose the multi-frequency maps into wavelet coefficients to isolate the tSZ signal based on its characteristic spatial scale and unique frequency dependence. This method targets the separation of the compact tSZ signal from the more diffuse CMB and CIB components by exploiting the localized nature of galaxy clusters in the wavelet domain.
 
-7. **Multi-Scale Wavelet Decomposition for Component Separation**: Develop a framework to decompose the stacked signal maps into wavelet scales to isolate the tSZ signal based on its unique spatial frequency profile. This research objective tests if wavelet-based denoising can outperform standard MMF filters in high-noise, high-multipole regimes.
+7. **Frequency-Dependent Beam Deconvolution via Wiener Filtering**
+Apply a multi-channel Wiener filter to invert the frequency-specific beam convolution while simultaneously suppressing noise. This approach focuses on recovering the true 1-arcmin resolution Compton-y signal by incorporating the known beam profiles of the SO and Planck instruments into the reconstruction operator.
 
-8. **CIB-tSZ Joint Covariance Modeling**: Develop a comprehensive covariance model that accounts for the physical coupling between CIB and tSZ signals within the same dark matter halos. The objective is to produce a refined noise-mitigation strategy that accounts for signal-signal correlations rather than treating them as independent contaminants.
+8. **kSZ/tSZ Joint Statistical Separation**
+Explore the use of the distinct spectral signatures of the kSZ and tSZ effects to perform blind source separation in the presence of CMB and CIB noise. By analyzing the frequency-dependent correlation matrix of the stacked maps, this method seeks to isolate the kSZ signal, which is currently obscured by the much stronger tSZ and CIB components.
 
-9. **Phase-Consistency Analysis for Map Denoising**: Examine the phase stability of the lensed CMB signal relative to the cluster-induced tSZ signal across different frequency channels. By identifying phase-coherent structures, we aim to establish a new technique for identifying genuine astrophysical clusters amidst incoherent instrumental noise.
+9. **Likelihood-Free Statistical Thresholding for Cluster Catalogues**
+Define a detection threshold based on the distribution of the signal-to-noise ratio derived from a multi-frequency matched filter. This approach aims to establish a rigorous statistical significance level for cluster candidates that accounts for the non-Gaussianity of the CIB and the specific noise properties of the SO and Planck datasets.
 
-10. **Impact of Lensing Convergence on Cluster Signal Recovery**: Quantify how variations in the underlying lensing convergence map ($\kappa$) distort the observed Compton-y signal of high-redshift clusters. The goal is to determine if the lensing-induced bias in the tSZ profile can be corrected to improve the accuracy of cluster mass scaling relations.
+10. **Gradient-Based Cluster Morphology Analysis**
+Implement a morphological filter based on the spatial gradient of the Compton-y map to distinguish between spherical clusters and non-thermalized, merging systems. By analyzing the structural properties of detected peaks, this method aims to provide a secondary classification criterion for clusters that goes beyond simple integrated-Y measurements.
 \end{IDEAS}
 
 
@@ -499,12 +513,19 @@ Possible directions (not exhaustive — Denario should feel free to propose nove
 
 
 Ideas:
-Idea selected1: **Baryonic Feedback Signatures in tSZ-CIB Residuals**: Assess the impact of AGN feedback physics—modeled in the FLAMINGO simulation—on the small-scale power spectrum of the tSZ signal. The goal is to constrain the relationship between cluster gas pressure profiles and the surrounding infrared-emitting galaxy populations.
-Idea selected2: **Baryonic Feedback Signatures in tSZ-CIB Residuals**: Assess the impact of AGN feedback physics—modeled in the FLAMINGO simulation—on the small-scale power spectrum of the tSZ signal. The goal is to constrain the relationship between cluster gas pressure profiles and the surrounding infrared-emitting galaxy populations.
-Idea selected3: **Baryonic Feedback Signatures in tSZ-CIB Residuals**: Assess the impact of AGN feedback physics—modeled in the FLAMINGO simulation—on the small-scale power spectrum of the tSZ signal. The goal is to constrain the relationship between cluster gas pressure profiles and the surrounding infrared-emitting galaxy populations.
+Idea selected1: **Optimal Multi-Frequency Weighting via Internal Linear Combination (ILC)**
+Extend the classical ILC method to produce a minimum-variance map specifically optimized for the tSZ spectral signature. By imposing a constrained minimization of the total variance while preserving the tSZ signal, this technique aims to suppress both CIB and kSZ foregrounds without requiring an explicit model for the cluster spatial profile.
+Idea selected2: **Optimal Multi-Frequency Weighting via Internal Linear Combination (ILC)**
+Extend the classical ILC method to produce a minimum-variance map specifically optimized for the tSZ spectral signature. By imposing a constrained minimization of the total variance while preserving the tSZ signal, this technique aims to suppress both CIB and kSZ foregrounds without requiring an explicit model for the cluster spatial profile.
+Idea selected3: **Optimal Multi-Frequency Weighting via Internal Linear Combination (ILC)**
+Extend the classical ILC method to produce a minimum-variance map specifically optimized for the tSZ spectral signature. By imposing a constrained minimization of the total variance while preserving the tSZ signal, this technique aims to suppress both CIB and kSZ foregrounds without requiring an explicit model for the cluster spatial profile.
 
 
 
+Human feedback:
+Avoid machine learning approaches. Focus on classical statistical methods for cluster finding — for example matched filters, optimal filters, Bayesian detection, or classical component separation techniques. The idea should be grounded in well-established CMB/SZ methodology.
+
+Take into account the human feedback when making your final selection. The feedback may indicate preferred research directions or specific constraints to consider.
 
 
 
@@ -520,7 +541,8 @@ In <IDEA>, put the idea you have selected
 ###### PROMPT ENDS ########
 
 \begin{IDEA}
-Baryonic Feedback Signatures in tSZ-CIB Residuals: Assess the impact of AGN feedback physics—modeled in the FLAMINGO simulation—on the small-scale power spectrum of the tSZ signal. The goal is to constrain the relationship between cluster gas pressure profiles and the surrounding infrared-emitting galaxy populations.
+**Optimal Multi-Frequency Weighting via Internal Linear Combination (ILC)**
+Extend the classical ILC method to produce a minimum-variance map specifically optimized for the tSZ spectral signature. By imposing a constrained minimization of the total variance while preserving the tSZ signal, this technique aims to suppress both CIB and kSZ foregrounds without requiring an explicit model for the cluster spatial profile.
 \end{IDEA}
 
 
@@ -534,6 +556,7 @@ Human:
 2. **Feasibility & Noise**: Is the signal-to-noise ratio realistic? Is the idea too ambitious for the provided data?
 3. **Redundancy Check**: Does this idea simply repeat a "standard" analysis, or is it a meaningful contribution?
 4. **Physical Reality**: Does the idea violate any constraints or physical laws mentioned in the data description?
+5. **Human Alignment**: Does the idea align with any human feedback or constraints provided?
 
 **Task**:
 - Critically analyze the "Current Idea" against the "Data Description."
@@ -756,7 +779,9 @@ Possible directions (not exhaustive — Denario should feel free to propose nove
 
 
 
-- **Current Idea**: Baryonic Feedback Signatures in tSZ-CIB Residuals: Assess the impact of AGN feedback physics—modeled in the FLAMINGO simulation—on the small-scale power spectrum of the tSZ signal. The goal is to constrain the relationship between cluster gas pressure profiles and the surrounding infrared-emitting galaxy populations.    
+- **Current Idea**: **Optimal Multi-Frequency Weighting via Internal Linear Combination (ILC)**
+Extend the classical ILC method to produce a minimum-variance map specifically optimized for the tSZ spectral signature. By imposing a constrained minimization of the total variance while preserving the tSZ signal, this technique aims to suppress both CIB and kSZ foregrounds without requiring an explicit model for the cluster spatial profile.
+- **Human Feedback**: Avoid machine learning approaches. Focus on classical statistical methods for cluster finding — for example matched filters, optimal filters, Bayesian detection, or classical component separation techniques. The idea should be grounded in well-established CMB/SZ methodology.    
 
 Respond in the following format:
 
@@ -769,10 +794,11 @@ In <CRITIC>, put your criticism to the idea. Try to be brief in the description.
 ###### PROMPT ENDS ########
 
 \begin{CRITIC}
-*   **Data-Hypothesis Mismatch**: The FLAMINGO simulation provides a fixed "HYDRO_FIDUCIAL" realization. You cannot "constrain" AGN feedback physics using a single-model dataset; you lack the parameter-space variation (e.g., varying AGN heating temperatures) required to perform inference on feedback models.
-*   **Feasibility & Noise**: The tSZ signal is $10^{15}$ times weaker in variance than the CIB at 857 GHz. Attempting to isolate "baryonic feedback signatures" (which are subtle modifications to the pressure profile) from the tSZ-CIB residual is statistically ill-posed given the massive CIB foreground contamination and the beam-smearing of the SO/Planck inputs.
-*   **Redundancy Check**: This is a "fishing expedition" rather than a hypothesis test. Without a suite of simulations with varying feedback prescriptions, this analysis is merely a descriptive measurement of a single simulation's output, not a scientific constraint.
-*   **Strategic Pivot**: Shift from "constraining feedback" to **"CIB-tSZ De-mixing Performance."** Use the known ground truth `tsz.npy` and `cib_353.npy` to train a model to perform component separation in the presence of SO+Planck noise. Quantify the *residual bias* in the recovered tSZ signal as a function of local CIB intensity. This provides a measurable, objective metric for the pipeline's robustness against foregrounds, which is a prerequisite for any future feedback study.
+*   **Data-Hypothesis Alignment**: Standard ILC is a linear combination of frequency maps. While it can null specific spectral signatures, it is notoriously poor at isolating the tSZ signal because the tSZ spectral response is highly degenerate with the CMB (at 217 GHz) and the CIB (at high frequencies). ILC will likely suppress the tSZ signal alongside the foregrounds unless the spatial information is explicitly utilized.
+*   **Feasibility & Noise**: The tSZ signal is $10^{15}$ times weaker in variance than the CIB. A global ILC will be dominated by the high-frequency CIB noise. Without a spatial prior (e.g., cluster profile), the ILC weights will be driven by the need to minimize the massive CIB variance, effectively "nulling" the tSZ signal to zero.
+*   **Redundancy Check**: Constrained ILC (cILC) is a standard, well-documented technique in CMB analysis. Simply applying it to these maps without a spatial component is a textbook exercise that will likely fail to outperform the MMF baseline.
+*   **Physical Reality**: The tSZ signal is spatially sparse. ILC is a global operation in harmonic space; it does not account for the non-Gaussian, localized nature of clusters. It will introduce significant "ringing" artifacts around clusters, leading to high false-positive rates in cluster detection.
+*   **Strategic Pivot**: Shift from global ILC to a **Multi-Frequency Matched Filter (MMF)**. The MMF is the industry-standard "classical" approach that incorporates both the spectral signature (via `utils.tsz`) and the spatial profile (e.g., a GNFW profile). This directly addresses the human feedback to avoid ML while respecting the physical constraints of the data.
 \end{CRITIC}
 
 
@@ -788,7 +814,8 @@ You are in an iterative refinement loop (Iteration: 0). Your goal is to take the
 1. **Address Caveats**: If the critic mentioned a lack of feasibility, adjust the scope of the idea to fit the 'Data Description.'
 2. **Increase Specificity**: Move away from generic goals. Use the statistics and variables found in the data description to make the idea more concrete.
 3. **Internalize Feedback**: Do not explicitly mention the criticism or explain your changes. Instead, weave the solutions directly into the new version of the idea.
-4. **Maintain Grounding**: Ensure the "groundbreaking" aspect remains physically possible within the provided dataset's constraints.
+4. **Human Guidance**: Incorporate any human feedback provided, ensuring the refined idea aligns with human preferences and constraints.
+5. **Maintain Grounding**: Ensure the "groundbreaking" aspect remains physically possible within the provided dataset's constraints.
 
 **Operational Constraints**:
 - **Brevity**: Keep the description concise but high-density (max 6 sentences).
@@ -1006,10 +1033,12 @@ Possible directions (not exhaustive — Denario should feel free to propose nove
 
 
 
-- **Critical Feedback**: *   **Data-Hypothesis Mismatch**: The FLAMINGO simulation provides a fixed "HYDRO_FIDUCIAL" realization. You cannot "constrain" AGN feedback physics using a single-model dataset; you lack the parameter-space variation (e.g., varying AGN heating temperatures) required to perform inference on feedback models.
-*   **Feasibility & Noise**: The tSZ signal is $10^{15}$ times weaker in variance than the CIB at 857 GHz. Attempting to isolate "baryonic feedback signatures" (which are subtle modifications to the pressure profile) from the tSZ-CIB residual is statistically ill-posed given the massive CIB foreground contamination and the beam-smearing of the SO/Planck inputs.
-*   **Redundancy Check**: This is a "fishing expedition" rather than a hypothesis test. Without a suite of simulations with varying feedback prescriptions, this analysis is merely a descriptive measurement of a single simulation's output, not a scientific constraint.
-*   **Strategic Pivot**: Shift from "constraining feedback" to **"CIB-tSZ De-mixing Performance."** Use the known ground truth `tsz.npy` and `cib_353.npy` to train a model to perform component separation in the presence of SO+Planck noise. Quantify the *residual bias* in the recovered tSZ signal as a function of local CIB intensity. This provides a measurable, objective metric for the pipeline's robustness against foregrounds, which is a prerequisite for any future feedback study.
+- **Critical Feedback**: *   **Data-Hypothesis Alignment**: Standard ILC is a linear combination of frequency maps. While it can null specific spectral signatures, it is notoriously poor at isolating the tSZ signal because the tSZ spectral response is highly degenerate with the CMB (at 217 GHz) and the CIB (at high frequencies). ILC will likely suppress the tSZ signal alongside the foregrounds unless the spatial information is explicitly utilized.
+*   **Feasibility & Noise**: The tSZ signal is $10^{15}$ times weaker in variance than the CIB. A global ILC will be dominated by the high-frequency CIB noise. Without a spatial prior (e.g., cluster profile), the ILC weights will be driven by the need to minimize the massive CIB variance, effectively "nulling" the tSZ signal to zero.
+*   **Redundancy Check**: Constrained ILC (cILC) is a standard, well-documented technique in CMB analysis. Simply applying it to these maps without a spatial component is a textbook exercise that will likely fail to outperform the MMF baseline.
+*   **Physical Reality**: The tSZ signal is spatially sparse. ILC is a global operation in harmonic space; it does not account for the non-Gaussian, localized nature of clusters. It will introduce significant "ringing" artifacts around clusters, leading to high false-positive rates in cluster detection.
+*   **Strategic Pivot**: Shift from global ILC to a **Multi-Frequency Matched Filter (MMF)**. The MMF is the industry-standard "classical" approach that incorporates both the spectral signature (via `utils.tsz`) and the spatial profile (e.g., a GNFW profile). This directly addresses the human feedback to avoid ML while respecting the physical constraints of the data.
+- **Human Feedback**: Avoid machine learning approaches. Focus on classical statistical methods for cluster finding — for example matched filters, optimal filters, Bayesian detection, or classical component separation techniques. The idea should be grounded in well-established CMB/SZ methodology.
 
 Respond in the following format:
 
@@ -1022,9 +1051,9 @@ In <IDEA>, put the refined idea.
 ###### PROMPT ENDS ########
 
 \begin{IDEA}
-**Title**: Residual-Bias Characterization in Multi-Frequency tSZ-CIB Separation via Differentiable Component De-mixing
+**Title**: Spatially-Adaptive Multi-Frequency Matched Filtering for Sparse tSZ Cluster Extraction
 
-**Description**: This study establishes a robust component-separation framework to isolate the Sunyaev-Zel'dovich (tSZ) signal from the dominant Cosmic Infrared Background (CIB) foregrounds using the FLAMINGO HYDRO_FIDUCIAL simulation. We will develop a U-Net-based architecture trained on the 90–857 GHz stacked maps, incorporating a masked focal loss to prioritize high-y cluster regions (y > 10⁻⁷) while explicitly penalizing the CIB-tSZ cross-correlation induced by the CIB confusion. By utilizing the available ground-truth maps, the model will output both the reconstructed Compton-y map and an associated uncertainty map, allowing for the quantification of the residual bias as a function of local CIB intensity. We will evaluate the pipeline's performance using a linear spectral consistency loss applied exclusively to high-SNR multipoles (ℓ > 1000) to ensure fidelity without hallucinating non-physical structures. The final metric, the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true), will provide a rigorous benchmark for the impact of CIB contamination on cluster-based cosmological parameters in next-generation CMB surveys.
+**Description**: This research objective aims to optimize galaxy cluster detection by implementing a spatially-adaptive Multi-Frequency Matched Filter (MMF) that explicitly leverages the known tSZ spectral signature and the spatial sparsity of the Compton-y signal. To mitigate CIB-induced bias and noise dominance in high-frequency channels, the filter will employ a frequency-dependent weight matrix derived from the cross-power spectra of the SO and Planck noise realizations, rather than a global ILC approach. We will model the cluster signal using a generalized Navarro-Frenk-White (GNFW) profile, applying a radial-dependent filter kernel to maximize the signal-to-noise ratio of the integrated Compton-y parameter while suppressing the non-Gaussian CIB background. Performance will be benchmarked against the ground truth `tsz.npy` maps using a completeness-purity threshold analysis, specifically evaluating the recovery of integrated-Y as a function of cluster mass and signal-to-noise ratio. This approach avoids global pixel-wise minimization, instead utilizing the physical priors of the tSZ spectral response (`utils.tsz(freq)`) to isolate cluster signals from the significantly higher-variance CIB and CMB foregrounds.
 \end{IDEA}
 
 
@@ -1038,6 +1067,7 @@ Human:
 2. **Feasibility & Noise**: Is the signal-to-noise ratio realistic? Is the idea too ambitious for the provided data?
 3. **Redundancy Check**: Does this idea simply repeat a "standard" analysis, or is it a meaningful contribution?
 4. **Physical Reality**: Does the idea violate any constraints or physical laws mentioned in the data description?
+5. **Human Alignment**: Does the idea align with any human feedback or constraints provided?
 
 **Task**:
 - Critically analyze the "Current Idea" against the "Data Description."
@@ -1260,17 +1290,18 @@ Possible directions (not exhaustive — Denario should feel free to propose nove
 
 
 
-- **Current Idea**: **Title**: Residual-Bias Characterization in Multi-Frequency tSZ-CIB Separation via Differentiable Component De-mixing
+- **Current Idea**: **Title**: Spatially-Adaptive Multi-Frequency Matched Filtering for Sparse tSZ Cluster Extraction
 
-**Description**: This study establishes a robust component-separation framework to isolate the Sunyaev-Zel'dovich (tSZ) signal from the dominant Cosmic Infrared Background (CIB) foregrounds using the FLAMINGO HYDRO_FIDUCIAL simulation. We will develop a U-Net-based architecture trained on the 90–857 GHz stacked maps, incorporating a masked focal loss to prioritize high-y cluster regions (y > 10⁻⁷) while explicitly penalizing the CIB-tSZ cross-correlation induced by the CIB confusion. By utilizing the available ground-truth maps, the model will output both the reconstructed Compton-y map and an associated uncertainty map, allowing for the quantification of the residual bias as a function of local CIB intensity. We will evaluate the pipeline's performance using a linear spectral consistency loss applied exclusively to high-SNR multipoles (ℓ > 1000) to ensure fidelity without hallucinating non-physical structures. The final metric, the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true), will provide a rigorous benchmark for the impact of CIB contamination on cluster-based cosmological parameters in next-generation CMB surveys.
+**Description**: This research objective aims to optimize galaxy cluster detection by implementing a spatially-adaptive Multi-Frequency Matched Filter (MMF) that explicitly leverages the known tSZ spectral signature and the spatial sparsity of the Compton-y signal. To mitigate CIB-induced bias and noise dominance in high-frequency channels, the filter will employ a frequency-dependent weight matrix derived from the cross-power spectra of the SO and Planck noise realizations, rather than a global ILC approach. We will model the cluster signal using a generalized Navarro-Frenk-White (GNFW) profile, applying a radial-dependent filter kernel to maximize the signal-to-noise ratio of the integrated Compton-y parameter while suppressing the non-Gaussian CIB background. Performance will be benchmarked against the ground truth `tsz.npy` maps using a completeness-purity threshold analysis, specifically evaluating the recovery of integrated-Y as a function of cluster mass and signal-to-noise ratio. This approach avoids global pixel-wise minimization, instead utilizing the physical priors of the tSZ spectral response (`utils.tsz(freq)`) to isolate cluster signals from the significantly higher-variance CIB and CMB foregrounds.
 - **Previous Versions (for context)**: 
 
 
 Iteration 0:
-Idea: **Title**: Residual-Bias Characterization in Multi-Frequency tSZ-CIB Separation via Differentiable Component De-mixing
+Idea: **Title**: Spatially-Adaptive Multi-Frequency Matched Filtering for Sparse tSZ Cluster Extraction
 
-**Description**: This study establishes a robust component-separation framework to isolate the Sunyaev-Zel'dovich (tSZ) signal from the dominant Cosmic Infrared Background (CIB) foregrounds using the FLAMINGO HYDRO_FIDUCIAL simulation. We will develop a U-Net-based architecture trained on the 90–857 GHz stacked maps, incorporating a masked focal loss to prioritize high-y cluster regions (y > 10⁻⁷) while explicitly penalizing the CIB-tSZ cross-correlation induced by the CIB confusion. By utilizing the available ground-truth maps, the model will output both the reconstructed Compton-y map and an associated uncertainty map, allowing for the quantification of the residual bias as a function of local CIB intensity. We will evaluate the pipeline's performance using a linear spectral consistency loss applied exclusively to high-SNR multipoles (ℓ > 1000) to ensure fidelity without hallucinating non-physical structures. The final metric, the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true), will provide a rigorous benchmark for the impact of CIB contamination on cluster-based cosmological parameters in next-generation CMB surveys.
-    
+**Description**: This research objective aims to optimize galaxy cluster detection by implementing a spatially-adaptive Multi-Frequency Matched Filter (MMF) that explicitly leverages the known tSZ spectral signature and the spatial sparsity of the Compton-y signal. To mitigate CIB-induced bias and noise dominance in high-frequency channels, the filter will employ a frequency-dependent weight matrix derived from the cross-power spectra of the SO and Planck noise realizations, rather than a global ILC approach. We will model the cluster signal using a generalized Navarro-Frenk-White (GNFW) profile, applying a radial-dependent filter kernel to maximize the signal-to-noise ratio of the integrated Compton-y parameter while suppressing the non-Gaussian CIB background. Performance will be benchmarked against the ground truth `tsz.npy` maps using a completeness-purity threshold analysis, specifically evaluating the recovery of integrated-Y as a function of cluster mass and signal-to-noise ratio. This approach avoids global pixel-wise minimization, instead utilizing the physical priors of the tSZ spectral response (`utils.tsz(freq)`) to isolate cluster signals from the significantly higher-variance CIB and CMB foregrounds.
+
+- **Human Feedback**: Avoid machine learning approaches. Focus on classical statistical methods for cluster finding — for example matched filters, optimal filters, Bayesian detection, or classical component separation techniques. The idea should be grounded in well-established CMB/SZ methodology.    
 
 Respond in the following format:
 
@@ -1283,11 +1314,13 @@ In <CRITIC>, put your criticism to the idea. Try to be brief in the description.
 ###### PROMPT ENDS ########
 
 \begin{CRITIC}
-*   **Data-Hypothesis Alignment**: The proposal to "explicitly penalize the CIB-tSZ cross-correlation" is logically flawed. The CIB and tSZ are physically correlated (both trace the same large-scale structure). Penalizing this correlation will force the model to suppress true tSZ signal in regions of high CIB, introducing a systematic bias in cluster mass estimation.
-*   **Feasibility & Noise**: The U-Net architecture is prone to "checkerboard" artifacts and spatial phase errors at high $\ell$. Given the 1-arcmin beam ground truth vs. the 4.5+ arcmin beam of Planck channels, the model is essentially performing super-resolution on the tSZ signal. The proposal lacks a strategy for handling the disparate beam sizes (the "beam-mismatch" problem).
-*   **Redundancy Check**: This is a standard "Deep Learning Component Separation" approach. It fails to distinguish itself from existing MMF baselines unless it explicitly addresses the non-Gaussianity of the CIB foregrounds, which the current description ignores.
-*   **Physical Reality**: The "linear spectral consistency loss" for $\ell > 1000$ is dangerous. At these scales, the SO noise power spectrum dominates. A spectral loss will likely force the model to fit the noise realizations rather than the underlying signal, leading to the "hallucination" the prompt warns against.
-*   **Strategic Pivot**: Abandon the "spectral consistency loss" entirely. Pivot to a **Conditional Diffusion Model or a Bayesian Neural Network** that learns the posterior $P(y | \text{obs})$. Use the MMF as a prior input channel to the network rather than relying on the network to learn the spectral response from scratch. Focus the evaluation on the **completeness-purity trade-off** at the cluster mass limit ($M_{500c} \approx 10^{14} M_\odot$) rather than global spectral metrics.
+*   **Redundancy/Originality**: The proposal is a standard implementation of the MMF. While robust, it lacks a "stress test" component. To be a meaningful contribution, it must address the specific challenge of the FLAMINGO dataset: the extreme CIB contamination at high frequencies and the non-Gaussian nature of the noise.
+*   **Feasibility Gap**: The proposal mentions a "spatially-adaptive" filter but does not define the adaptation mechanism. In a 5°x5° patch, the noise is stationary, but the CIB is highly non-stationary. A static MMF will fail in high-CIB regions.
+*   **Data-Hypothesis Alignment**: The proposal relies on a GNFW profile. However, the FLAMINGO simulation includes complex baryonic physics (AGN feedback). A rigid GNFW assumption may introduce significant mass bias.
+*   **Strategic Pivot**: 
+    *   **Incorporate CIB-Mitigation**: Instead of a standard MMF, implement a **Constrained Matched Filter (CMF)** that explicitly nulls the CIB component (using the 353/545/857 GHz channels as a CIB-template) while maximizing the tSZ signal.
+    *   **Empirical Noise Covariance**: Use the provided 3000 SO noise realizations and 100 Planck MCs to compute the *empirical* noise covariance matrix $\mathbf{C}_\ell$ rather than assuming a theoretical model. This is critical for the "stress test" of the pipeline.
+    *   **Validation**: Quantify the "Mass Bias" (recovered $Y_{500}$ vs. ground truth $Y_{500}$) specifically for clusters in high-CIB density regions to demonstrate the filter's robustness.
 \end{CRITIC}
 
 
@@ -1303,7 +1336,8 @@ You are in an iterative refinement loop (Iteration: 1). Your goal is to take the
 1. **Address Caveats**: If the critic mentioned a lack of feasibility, adjust the scope of the idea to fit the 'Data Description.'
 2. **Increase Specificity**: Move away from generic goals. Use the statistics and variables found in the data description to make the idea more concrete.
 3. **Internalize Feedback**: Do not explicitly mention the criticism or explain your changes. Instead, weave the solutions directly into the new version of the idea.
-4. **Maintain Grounding**: Ensure the "groundbreaking" aspect remains physically possible within the provided dataset's constraints.
+4. **Human Guidance**: Incorporate any human feedback provided, ensuring the refined idea aligns with human preferences and constraints.
+5. **Maintain Grounding**: Ensure the "groundbreaking" aspect remains physically possible within the provided dataset's constraints.
 
 **Operational Constraints**:
 - **Brevity**: Keep the description concise but high-density (max 6 sentences).
@@ -1525,15 +1559,18 @@ Possible directions (not exhaustive — Denario should feel free to propose nove
 
 
 Iteration 0:
-Idea: **Title**: Residual-Bias Characterization in Multi-Frequency tSZ-CIB Separation via Differentiable Component De-mixing
+Idea: **Title**: Spatially-Adaptive Multi-Frequency Matched Filtering for Sparse tSZ Cluster Extraction
 
-**Description**: This study establishes a robust component-separation framework to isolate the Sunyaev-Zel'dovich (tSZ) signal from the dominant Cosmic Infrared Background (CIB) foregrounds using the FLAMINGO HYDRO_FIDUCIAL simulation. We will develop a U-Net-based architecture trained on the 90–857 GHz stacked maps, incorporating a masked focal loss to prioritize high-y cluster regions (y > 10⁻⁷) while explicitly penalizing the CIB-tSZ cross-correlation induced by the CIB confusion. By utilizing the available ground-truth maps, the model will output both the reconstructed Compton-y map and an associated uncertainty map, allowing for the quantification of the residual bias as a function of local CIB intensity. We will evaluate the pipeline's performance using a linear spectral consistency loss applied exclusively to high-SNR multipoles (ℓ > 1000) to ensure fidelity without hallucinating non-physical structures. The final metric, the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true), will provide a rigorous benchmark for the impact of CIB contamination on cluster-based cosmological parameters in next-generation CMB surveys.
+**Description**: This research objective aims to optimize galaxy cluster detection by implementing a spatially-adaptive Multi-Frequency Matched Filter (MMF) that explicitly leverages the known tSZ spectral signature and the spatial sparsity of the Compton-y signal. To mitigate CIB-induced bias and noise dominance in high-frequency channels, the filter will employ a frequency-dependent weight matrix derived from the cross-power spectra of the SO and Planck noise realizations, rather than a global ILC approach. We will model the cluster signal using a generalized Navarro-Frenk-White (GNFW) profile, applying a radial-dependent filter kernel to maximize the signal-to-noise ratio of the integrated Compton-y parameter while suppressing the non-Gaussian CIB background. Performance will be benchmarked against the ground truth `tsz.npy` maps using a completeness-purity threshold analysis, specifically evaluating the recovery of integrated-Y as a function of cluster mass and signal-to-noise ratio. This approach avoids global pixel-wise minimization, instead utilizing the physical priors of the tSZ spectral response (`utils.tsz(freq)`) to isolate cluster signals from the significantly higher-variance CIB and CMB foregrounds.
 
-- **Critical Feedback**: *   **Data-Hypothesis Alignment**: The proposal to "explicitly penalize the CIB-tSZ cross-correlation" is logically flawed. The CIB and tSZ are physically correlated (both trace the same large-scale structure). Penalizing this correlation will force the model to suppress true tSZ signal in regions of high CIB, introducing a systematic bias in cluster mass estimation.
-*   **Feasibility & Noise**: The U-Net architecture is prone to "checkerboard" artifacts and spatial phase errors at high $\ell$. Given the 1-arcmin beam ground truth vs. the 4.5+ arcmin beam of Planck channels, the model is essentially performing super-resolution on the tSZ signal. The proposal lacks a strategy for handling the disparate beam sizes (the "beam-mismatch" problem).
-*   **Redundancy Check**: This is a standard "Deep Learning Component Separation" approach. It fails to distinguish itself from existing MMF baselines unless it explicitly addresses the non-Gaussianity of the CIB foregrounds, which the current description ignores.
-*   **Physical Reality**: The "linear spectral consistency loss" for $\ell > 1000$ is dangerous. At these scales, the SO noise power spectrum dominates. A spectral loss will likely force the model to fit the noise realizations rather than the underlying signal, leading to the "hallucination" the prompt warns against.
-*   **Strategic Pivot**: Abandon the "spectral consistency loss" entirely. Pivot to a **Conditional Diffusion Model or a Bayesian Neural Network** that learns the posterior $P(y | \text{obs})$. Use the MMF as a prior input channel to the network rather than relying on the network to learn the spectral response from scratch. Focus the evaluation on the **completeness-purity trade-off** at the cluster mass limit ($M_{500c} \approx 10^{14} M_\odot$) rather than global spectral metrics.
+- **Critical Feedback**: *   **Redundancy/Originality**: The proposal is a standard implementation of the MMF. While robust, it lacks a "stress test" component. To be a meaningful contribution, it must address the specific challenge of the FLAMINGO dataset: the extreme CIB contamination at high frequencies and the non-Gaussian nature of the noise.
+*   **Feasibility Gap**: The proposal mentions a "spatially-adaptive" filter but does not define the adaptation mechanism. In a 5°x5° patch, the noise is stationary, but the CIB is highly non-stationary. A static MMF will fail in high-CIB regions.
+*   **Data-Hypothesis Alignment**: The proposal relies on a GNFW profile. However, the FLAMINGO simulation includes complex baryonic physics (AGN feedback). A rigid GNFW assumption may introduce significant mass bias.
+*   **Strategic Pivot**: 
+    *   **Incorporate CIB-Mitigation**: Instead of a standard MMF, implement a **Constrained Matched Filter (CMF)** that explicitly nulls the CIB component (using the 353/545/857 GHz channels as a CIB-template) while maximizing the tSZ signal.
+    *   **Empirical Noise Covariance**: Use the provided 3000 SO noise realizations and 100 Planck MCs to compute the *empirical* noise covariance matrix $\mathbf{C}_\ell$ rather than assuming a theoretical model. This is critical for the "stress test" of the pipeline.
+    *   **Validation**: Quantify the "Mass Bias" (recovered $Y_{500}$ vs. ground truth $Y_{500}$) specifically for clusters in high-CIB density regions to demonstrate the filter's robustness.
+- **Human Feedback**: Avoid machine learning approaches. Focus on classical statistical methods for cluster finding — for example matched filters, optimal filters, Bayesian detection, or classical component separation techniques. The idea should be grounded in well-established CMB/SZ methodology.
 
 Respond in the following format:
 
@@ -1546,9 +1583,9 @@ In <IDEA>, put the refined idea.
 ###### PROMPT ENDS ########
 
 \begin{IDEA}
-**Title**: Bayesian Posterior Estimation of tSZ Compton-y Maps via Conditioned Denoising Diffusion Probabilistic Models (DDPM)
+**Title**: CIB-Nulling Constrained Matched Filtering (CMF) for Robust tSZ Cluster Extraction
 
-**Description**: We propose a diffusion-based generative framework to recover the non-Gaussian tSZ Compton-y signal by learning the posterior distribution $P(y | \text{obs, MMF})$, where the Multi-Frequency Matched Filter (MMF) output serves as a high-fidelity prior input channel to anchor the network. By conditioning the diffusion process on the MMF-filtered map and the multi-frequency inputs (90–857 GHz), the model mitigates beam-mismatch artifacts by learning to reconstruct 1-arcmin features directly from the frequency-dependent beam profiles. The training objective utilizes a masked focal loss on the denoising score matching process, specifically targeting cluster-dense regions ($y > 10^{-7}$) to prevent model collapse in the sparse signal regime. To address CIB contamination, the model is trained to distinguish between tSZ thermal signatures and CIB-induced spatial fluctuations, bypassing the need for explicit spectral consistency losses that risk noise-fitting. Performance is quantified by the survey selection function, measuring completeness and purity versus cluster mass ($M_{500c}$), providing a robust alternative to standard MMF baselines for next-generation cluster finding.
+**Description**: This research objective implements a Constrained Matched Filter (CMF) to extract the tSZ Compton-y signal while explicitly nulling CIB contamination. By utilizing the 353, 545, and 857 GHz channels as spatial templates, the filter constructs a projection matrix that enforces a zero-response constraint to the CIB spectral signature, mitigating the 10¹⁵ variance disparity. The filter kernel is optimized using an empirical noise covariance matrix, $\mathbf{C}_\ell$, computed directly from the 3000 SO LAT and 100 Planck FFP10 realizations to capture non-Gaussian noise properties. To address potential mass bias arising from AGN feedback in the FLAMINGO simulation, the filter will be tested against a non-parametric cluster profile derived from the simulation's own stacked cluster signal rather than a rigid GNFW assumption. Performance is benchmarked by measuring the mass-dependent detection completeness and purity, specifically quantifying the recovered integrated-Y bias in high-CIB density regions versus low-density fields. The analysis will utilize `utils.powers` with the required Hann-tapered windowing to ensure spectral accuracy at $\ell > 1000$.
 \end{IDEA}
 
 
@@ -1562,6 +1599,7 @@ Human:
 2. **Feasibility & Noise**: Is the signal-to-noise ratio realistic? Is the idea too ambitious for the provided data?
 3. **Redundancy Check**: Does this idea simply repeat a "standard" analysis, or is it a meaningful contribution?
 4. **Physical Reality**: Does the idea violate any constraints or physical laws mentioned in the data description?
+5. **Human Alignment**: Does the idea align with any human feedback or constraints provided?
 
 **Task**:
 - Critically analyze the "Current Idea" against the "Data Description."
@@ -1784,24 +1822,25 @@ Possible directions (not exhaustive — Denario should feel free to propose nove
 
 
 
-- **Current Idea**: **Title**: Bayesian Posterior Estimation of tSZ Compton-y Maps via Conditioned Denoising Diffusion Probabilistic Models (DDPM)
+- **Current Idea**: **Title**: CIB-Nulling Constrained Matched Filtering (CMF) for Robust tSZ Cluster Extraction
 
-**Description**: We propose a diffusion-based generative framework to recover the non-Gaussian tSZ Compton-y signal by learning the posterior distribution $P(y | \text{obs, MMF})$, where the Multi-Frequency Matched Filter (MMF) output serves as a high-fidelity prior input channel to anchor the network. By conditioning the diffusion process on the MMF-filtered map and the multi-frequency inputs (90–857 GHz), the model mitigates beam-mismatch artifacts by learning to reconstruct 1-arcmin features directly from the frequency-dependent beam profiles. The training objective utilizes a masked focal loss on the denoising score matching process, specifically targeting cluster-dense regions ($y > 10^{-7}$) to prevent model collapse in the sparse signal regime. To address CIB contamination, the model is trained to distinguish between tSZ thermal signatures and CIB-induced spatial fluctuations, bypassing the need for explicit spectral consistency losses that risk noise-fitting. Performance is quantified by the survey selection function, measuring completeness and purity versus cluster mass ($M_{500c}$), providing a robust alternative to standard MMF baselines for next-generation cluster finding.
+**Description**: This research objective implements a Constrained Matched Filter (CMF) to extract the tSZ Compton-y signal while explicitly nulling CIB contamination. By utilizing the 353, 545, and 857 GHz channels as spatial templates, the filter constructs a projection matrix that enforces a zero-response constraint to the CIB spectral signature, mitigating the 10¹⁵ variance disparity. The filter kernel is optimized using an empirical noise covariance matrix, $\mathbf{C}_\ell$, computed directly from the 3000 SO LAT and 100 Planck FFP10 realizations to capture non-Gaussian noise properties. To address potential mass bias arising from AGN feedback in the FLAMINGO simulation, the filter will be tested against a non-parametric cluster profile derived from the simulation's own stacked cluster signal rather than a rigid GNFW assumption. Performance is benchmarked by measuring the mass-dependent detection completeness and purity, specifically quantifying the recovered integrated-Y bias in high-CIB density regions versus low-density fields. The analysis will utilize `utils.powers` with the required Hann-tapered windowing to ensure spectral accuracy at $\ell > 1000$.
 - **Previous Versions (for context)**: 
 
 
 
 Iteration 0:
-Idea: **Title**: Residual-Bias Characterization in Multi-Frequency tSZ-CIB Separation via Differentiable Component De-mixing
+Idea: **Title**: Spatially-Adaptive Multi-Frequency Matched Filtering for Sparse tSZ Cluster Extraction
 
-**Description**: This study establishes a robust component-separation framework to isolate the Sunyaev-Zel'dovich (tSZ) signal from the dominant Cosmic Infrared Background (CIB) foregrounds using the FLAMINGO HYDRO_FIDUCIAL simulation. We will develop a U-Net-based architecture trained on the 90–857 GHz stacked maps, incorporating a masked focal loss to prioritize high-y cluster regions (y > 10⁻⁷) while explicitly penalizing the CIB-tSZ cross-correlation induced by the CIB confusion. By utilizing the available ground-truth maps, the model will output both the reconstructed Compton-y map and an associated uncertainty map, allowing for the quantification of the residual bias as a function of local CIB intensity. We will evaluate the pipeline's performance using a linear spectral consistency loss applied exclusively to high-SNR multipoles (ℓ > 1000) to ensure fidelity without hallucinating non-physical structures. The final metric, the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true), will provide a rigorous benchmark for the impact of CIB contamination on cluster-based cosmological parameters in next-generation CMB surveys.
+**Description**: This research objective aims to optimize galaxy cluster detection by implementing a spatially-adaptive Multi-Frequency Matched Filter (MMF) that explicitly leverages the known tSZ spectral signature and the spatial sparsity of the Compton-y signal. To mitigate CIB-induced bias and noise dominance in high-frequency channels, the filter will employ a frequency-dependent weight matrix derived from the cross-power spectra of the SO and Planck noise realizations, rather than a global ILC approach. We will model the cluster signal using a generalized Navarro-Frenk-White (GNFW) profile, applying a radial-dependent filter kernel to maximize the signal-to-noise ratio of the integrated Compton-y parameter while suppressing the non-Gaussian CIB background. Performance will be benchmarked against the ground truth `tsz.npy` maps using a completeness-purity threshold analysis, specifically evaluating the recovery of integrated-Y as a function of cluster mass and signal-to-noise ratio. This approach avoids global pixel-wise minimization, instead utilizing the physical priors of the tSZ spectral response (`utils.tsz(freq)`) to isolate cluster signals from the significantly higher-variance CIB and CMB foregrounds.
 
 
 Iteration 1:
-Idea: **Title**: Bayesian Posterior Estimation of tSZ Compton-y Maps via Conditioned Denoising Diffusion Probabilistic Models (DDPM)
+Idea: **Title**: CIB-Nulling Constrained Matched Filtering (CMF) for Robust tSZ Cluster Extraction
 
-**Description**: We propose a diffusion-based generative framework to recover the non-Gaussian tSZ Compton-y signal by learning the posterior distribution $P(y | \text{obs, MMF})$, where the Multi-Frequency Matched Filter (MMF) output serves as a high-fidelity prior input channel to anchor the network. By conditioning the diffusion process on the MMF-filtered map and the multi-frequency inputs (90–857 GHz), the model mitigates beam-mismatch artifacts by learning to reconstruct 1-arcmin features directly from the frequency-dependent beam profiles. The training objective utilizes a masked focal loss on the denoising score matching process, specifically targeting cluster-dense regions ($y > 10^{-7}$) to prevent model collapse in the sparse signal regime. To address CIB contamination, the model is trained to distinguish between tSZ thermal signatures and CIB-induced spatial fluctuations, bypassing the need for explicit spectral consistency losses that risk noise-fitting. Performance is quantified by the survey selection function, measuring completeness and purity versus cluster mass ($M_{500c}$), providing a robust alternative to standard MMF baselines for next-generation cluster finding.
-    
+**Description**: This research objective implements a Constrained Matched Filter (CMF) to extract the tSZ Compton-y signal while explicitly nulling CIB contamination. By utilizing the 353, 545, and 857 GHz channels as spatial templates, the filter constructs a projection matrix that enforces a zero-response constraint to the CIB spectral signature, mitigating the 10¹⁵ variance disparity. The filter kernel is optimized using an empirical noise covariance matrix, $\mathbf{C}_\ell$, computed directly from the 3000 SO LAT and 100 Planck FFP10 realizations to capture non-Gaussian noise properties. To address potential mass bias arising from AGN feedback in the FLAMINGO simulation, the filter will be tested against a non-parametric cluster profile derived from the simulation's own stacked cluster signal rather than a rigid GNFW assumption. Performance is benchmarked by measuring the mass-dependent detection completeness and purity, specifically quantifying the recovered integrated-Y bias in high-CIB density regions versus low-density fields. The analysis will utilize `utils.powers` with the required Hann-tapered windowing to ensure spectral accuracy at $\ell > 1000$.
+
+- **Human Feedback**: Avoid machine learning approaches. Focus on classical statistical methods for cluster finding — for example matched filters, optimal filters, Bayesian detection, or classical component separation techniques. The idea should be grounded in well-established CMB/SZ methodology.    
 
 Respond in the following format:
 
@@ -1814,11 +1853,14 @@ In <CRITIC>, put your criticism to the idea. Try to be brief in the description.
 ###### PROMPT ENDS ########
 
 \begin{CRITIC}
-*   **Data-Hypothesis Alignment**: The proposal relies on MMF as a "prior" input. MMF is a linear filter; if the DDPM is powerful enough to learn the posterior, the MMF input is redundant. If the MMF is necessary, the DDPM is likely failing to learn the underlying physics, suggesting a lack of trust in the generative model's ability to handle the 10¹⁵ variance gap.
-*   **Feasibility & Noise**: DDPMs are notoriously difficult to train on sparse, high-dynamic-range signals. The "masked focal loss" on a score-matching objective is non-standard and mathematically ill-defined for diffusion (which typically minimizes MSE on the noise prediction). You risk "mode collapse" where the model ignores the sparse clusters to minimize the score error on the Gaussian background.
-*   **Redundancy Check**: This is a "black box" approach to a problem (cluster finding) that is already well-solved by MMF. Without a clear mechanism for how the DDPM improves upon MMF (e.g., non-Gaussian feature extraction), this is an incremental complexity increase rather than a scientific contribution.
-*   **Physical Reality**: The proposal ignores the "Dynamic Range Warning." Diffusion models struggle with the extreme variance disparity between CIB and tSZ. Unless you implement a multi-scale or hierarchical architecture, the model will prioritize the high-variance CIB/CMB components, effectively treating the tSZ signal as residual noise.
-*   **Strategic Pivot**: Abandon the DDPM for now. Pivot to a **Supervised Segmentation/Detection Network (e.g., U-Net or Mask R-CNN)** using the provided ground truth. Focus on **CIB-tSZ de-mixing** by training the network to predict the tSZ map while simultaneously predicting a CIB-mask. This directly addresses the "CIB contamination" problem mentioned in the dataset description without the training instability of diffusion.
+*   **Data-Hypothesis Alignment**: The CMF approach assumes the CIB is a spatially coherent template across frequencies. However, the CIB at 353, 545, and 857 GHz is not a single spatial template; it is a multi-frequency field with varying spectral indices and spatial correlations. Using these as simple "spatial templates" for nulling is mathematically ill-posed without a robust model of the CIB spectral energy distribution (SED) variation.
+*   **Feasibility & Noise**: The CMF requires the inversion of the noise covariance matrix $\mathbf{C}_\ell$. With 6 frequency channels and 256x256 pixels, the full covariance matrix is massive. If you intend to perform this in harmonic space, you must justify the assumption of stationarity, which is violated by the presence of localized clusters (the signal of interest).
+*   **Redundancy Check**: This is a standard extension of the MMF. While "CIB-nulling" is a valid goal, the proposal lacks a specific mechanism for handling the *spectral* variation of the CIB, which is the primary source of confusion in high-frequency channels.
+*   **Physical Reality**: The proposal mentions using a "non-parametric cluster profile." Ensure this profile is properly beam-convolved for each frequency channel. If the profile is derived from the simulation, it must be matched to the specific beam FWHM of the SO/Planck channels, or the filter will be sub-optimal.
+*   **Weak Links**: 
+    *   The "nulling" constraint is highly sensitive to the accuracy of the assumed CIB spectral response. If the CIB SED varies across the sky (which it does in FLAMINGO), a fixed nulling constraint will introduce significant bias.
+    *   The proposal does not address the 10¹⁵ variance disparity between CIB and tSZ effectively; nulling a high-variance component often leads to massive noise amplification in the reconstructed map.
+*   **Strategic Pivot**: Instead of a hard nulling constraint, implement a **Multi-Frequency Wiener Filter** that incorporates the CIB cross-power spectra as part of the signal covariance matrix. This allows for a statistically optimal trade-off between CIB suppression and noise amplification, rather than a rigid (and potentially unstable) nulling projection.
 \end{CRITIC}
 
 
@@ -1834,7 +1876,8 @@ You are in an iterative refinement loop (Iteration: 2). Your goal is to take the
 1. **Address Caveats**: If the critic mentioned a lack of feasibility, adjust the scope of the idea to fit the 'Data Description.'
 2. **Increase Specificity**: Move away from generic goals. Use the statistics and variables found in the data description to make the idea more concrete.
 3. **Internalize Feedback**: Do not explicitly mention the criticism or explain your changes. Instead, weave the solutions directly into the new version of the idea.
-4. **Maintain Grounding**: Ensure the "groundbreaking" aspect remains physically possible within the provided dataset's constraints.
+4. **Human Guidance**: Incorporate any human feedback provided, ensuring the refined idea aligns with human preferences and constraints.
+5. **Maintain Grounding**: Ensure the "groundbreaking" aspect remains physically possible within the provided dataset's constraints.
 
 **Operational Constraints**:
 - **Brevity**: Keep the description concise but high-density (max 6 sentences).
@@ -2057,21 +2100,25 @@ Possible directions (not exhaustive — Denario should feel free to propose nove
 
 
 Iteration 0:
-Idea: **Title**: Residual-Bias Characterization in Multi-Frequency tSZ-CIB Separation via Differentiable Component De-mixing
+Idea: **Title**: Spatially-Adaptive Multi-Frequency Matched Filtering for Sparse tSZ Cluster Extraction
 
-**Description**: This study establishes a robust component-separation framework to isolate the Sunyaev-Zel'dovich (tSZ) signal from the dominant Cosmic Infrared Background (CIB) foregrounds using the FLAMINGO HYDRO_FIDUCIAL simulation. We will develop a U-Net-based architecture trained on the 90–857 GHz stacked maps, incorporating a masked focal loss to prioritize high-y cluster regions (y > 10⁻⁷) while explicitly penalizing the CIB-tSZ cross-correlation induced by the CIB confusion. By utilizing the available ground-truth maps, the model will output both the reconstructed Compton-y map and an associated uncertainty map, allowing for the quantification of the residual bias as a function of local CIB intensity. We will evaluate the pipeline's performance using a linear spectral consistency loss applied exclusively to high-SNR multipoles (ℓ > 1000) to ensure fidelity without hallucinating non-physical structures. The final metric, the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true), will provide a rigorous benchmark for the impact of CIB contamination on cluster-based cosmological parameters in next-generation CMB surveys.
+**Description**: This research objective aims to optimize galaxy cluster detection by implementing a spatially-adaptive Multi-Frequency Matched Filter (MMF) that explicitly leverages the known tSZ spectral signature and the spatial sparsity of the Compton-y signal. To mitigate CIB-induced bias and noise dominance in high-frequency channels, the filter will employ a frequency-dependent weight matrix derived from the cross-power spectra of the SO and Planck noise realizations, rather than a global ILC approach. We will model the cluster signal using a generalized Navarro-Frenk-White (GNFW) profile, applying a radial-dependent filter kernel to maximize the signal-to-noise ratio of the integrated Compton-y parameter while suppressing the non-Gaussian CIB background. Performance will be benchmarked against the ground truth `tsz.npy` maps using a completeness-purity threshold analysis, specifically evaluating the recovery of integrated-Y as a function of cluster mass and signal-to-noise ratio. This approach avoids global pixel-wise minimization, instead utilizing the physical priors of the tSZ spectral response (`utils.tsz(freq)`) to isolate cluster signals from the significantly higher-variance CIB and CMB foregrounds.
 
 
 Iteration 1:
-Idea: **Title**: Bayesian Posterior Estimation of tSZ Compton-y Maps via Conditioned Denoising Diffusion Probabilistic Models (DDPM)
+Idea: **Title**: CIB-Nulling Constrained Matched Filtering (CMF) for Robust tSZ Cluster Extraction
 
-**Description**: We propose a diffusion-based generative framework to recover the non-Gaussian tSZ Compton-y signal by learning the posterior distribution $P(y | \text{obs, MMF})$, where the Multi-Frequency Matched Filter (MMF) output serves as a high-fidelity prior input channel to anchor the network. By conditioning the diffusion process on the MMF-filtered map and the multi-frequency inputs (90–857 GHz), the model mitigates beam-mismatch artifacts by learning to reconstruct 1-arcmin features directly from the frequency-dependent beam profiles. The training objective utilizes a masked focal loss on the denoising score matching process, specifically targeting cluster-dense regions ($y > 10^{-7}$) to prevent model collapse in the sparse signal regime. To address CIB contamination, the model is trained to distinguish between tSZ thermal signatures and CIB-induced spatial fluctuations, bypassing the need for explicit spectral consistency losses that risk noise-fitting. Performance is quantified by the survey selection function, measuring completeness and purity versus cluster mass ($M_{500c}$), providing a robust alternative to standard MMF baselines for next-generation cluster finding.
+**Description**: This research objective implements a Constrained Matched Filter (CMF) to extract the tSZ Compton-y signal while explicitly nulling CIB contamination. By utilizing the 353, 545, and 857 GHz channels as spatial templates, the filter constructs a projection matrix that enforces a zero-response constraint to the CIB spectral signature, mitigating the 10¹⁵ variance disparity. The filter kernel is optimized using an empirical noise covariance matrix, $\mathbf{C}_\ell$, computed directly from the 3000 SO LAT and 100 Planck FFP10 realizations to capture non-Gaussian noise properties. To address potential mass bias arising from AGN feedback in the FLAMINGO simulation, the filter will be tested against a non-parametric cluster profile derived from the simulation's own stacked cluster signal rather than a rigid GNFW assumption. Performance is benchmarked by measuring the mass-dependent detection completeness and purity, specifically quantifying the recovered integrated-Y bias in high-CIB density regions versus low-density fields. The analysis will utilize `utils.powers` with the required Hann-tapered windowing to ensure spectral accuracy at $\ell > 1000$.
 
-- **Critical Feedback**: *   **Data-Hypothesis Alignment**: The proposal relies on MMF as a "prior" input. MMF is a linear filter; if the DDPM is powerful enough to learn the posterior, the MMF input is redundant. If the MMF is necessary, the DDPM is likely failing to learn the underlying physics, suggesting a lack of trust in the generative model's ability to handle the 10¹⁵ variance gap.
-*   **Feasibility & Noise**: DDPMs are notoriously difficult to train on sparse, high-dynamic-range signals. The "masked focal loss" on a score-matching objective is non-standard and mathematically ill-defined for diffusion (which typically minimizes MSE on the noise prediction). You risk "mode collapse" where the model ignores the sparse clusters to minimize the score error on the Gaussian background.
-*   **Redundancy Check**: This is a "black box" approach to a problem (cluster finding) that is already well-solved by MMF. Without a clear mechanism for how the DDPM improves upon MMF (e.g., non-Gaussian feature extraction), this is an incremental complexity increase rather than a scientific contribution.
-*   **Physical Reality**: The proposal ignores the "Dynamic Range Warning." Diffusion models struggle with the extreme variance disparity between CIB and tSZ. Unless you implement a multi-scale or hierarchical architecture, the model will prioritize the high-variance CIB/CMB components, effectively treating the tSZ signal as residual noise.
-*   **Strategic Pivot**: Abandon the DDPM for now. Pivot to a **Supervised Segmentation/Detection Network (e.g., U-Net or Mask R-CNN)** using the provided ground truth. Focus on **CIB-tSZ de-mixing** by training the network to predict the tSZ map while simultaneously predicting a CIB-mask. This directly addresses the "CIB contamination" problem mentioned in the dataset description without the training instability of diffusion.
+- **Critical Feedback**: *   **Data-Hypothesis Alignment**: The CMF approach assumes the CIB is a spatially coherent template across frequencies. However, the CIB at 353, 545, and 857 GHz is not a single spatial template; it is a multi-frequency field with varying spectral indices and spatial correlations. Using these as simple "spatial templates" for nulling is mathematically ill-posed without a robust model of the CIB spectral energy distribution (SED) variation.
+*   **Feasibility & Noise**: The CMF requires the inversion of the noise covariance matrix $\mathbf{C}_\ell$. With 6 frequency channels and 256x256 pixels, the full covariance matrix is massive. If you intend to perform this in harmonic space, you must justify the assumption of stationarity, which is violated by the presence of localized clusters (the signal of interest).
+*   **Redundancy Check**: This is a standard extension of the MMF. While "CIB-nulling" is a valid goal, the proposal lacks a specific mechanism for handling the *spectral* variation of the CIB, which is the primary source of confusion in high-frequency channels.
+*   **Physical Reality**: The proposal mentions using a "non-parametric cluster profile." Ensure this profile is properly beam-convolved for each frequency channel. If the profile is derived from the simulation, it must be matched to the specific beam FWHM of the SO/Planck channels, or the filter will be sub-optimal.
+*   **Weak Links**: 
+    *   The "nulling" constraint is highly sensitive to the accuracy of the assumed CIB spectral response. If the CIB SED varies across the sky (which it does in FLAMINGO), a fixed nulling constraint will introduce significant bias.
+    *   The proposal does not address the 10¹⁵ variance disparity between CIB and tSZ effectively; nulling a high-variance component often leads to massive noise amplification in the reconstructed map.
+*   **Strategic Pivot**: Instead of a hard nulling constraint, implement a **Multi-Frequency Wiener Filter** that incorporates the CIB cross-power spectra as part of the signal covariance matrix. This allows for a statistically optimal trade-off between CIB suppression and noise amplification, rather than a rigid (and potentially unstable) nulling projection.
+- **Human Feedback**: Avoid machine learning approaches. Focus on classical statistical methods for cluster finding — for example matched filters, optimal filters, Bayesian detection, or classical component separation techniques. The idea should be grounded in well-established CMB/SZ methodology.
 
 Respond in the following format:
 
@@ -2084,8 +2131,8 @@ In <IDEA>, put the refined idea.
 ###### PROMPT ENDS ########
 
 \begin{IDEA}
-**Title**: Multi-Scale Feature-Decoupling Network for tSZ-CIB Separation and Cluster Extraction
+**Title**: Cross-Spectral Wiener Filtering for Optimal tSZ Extraction and Cluster Detection
 
-**Description**: We propose a dual-branch U-Net architecture designed to perform simultaneous supervised estimation of the tSZ Compton-y signal and a spatially-varying CIB-contamination mask. To address the 10¹⁵ variance disparity, the network employs a hierarchical loss function that applies a heavy focal weight (10³–10⁴) to cluster-dense regions ($y > 10^{-7}$) while utilizing a secondary branch to explicitly reconstruct the CIB at 857 GHz as a learnable nuisance foreground. The model architecture integrates skip-connections with attention-gating to suppress high-ℓ noise where the SO LAT beam-suppression renders pixel-wise recovery physically impossible. Instead of global spectral loss, we enforce a linear spectral consistency constraint restricted to ℓ > 1000 and high-SNR multipole bins to ensure physical fidelity. The pipeline is validated against the MMF baseline by comparing the cluster selection function—specifically completeness and purity—as a function of mass, utilizing the transfer function T(ℓ) to quantify the mitigation of CIB-induced false detections. By treating CIB contamination as a learned segmentation task, this approach provides a robust, non-generative alternative for recovering integrated-Y in the presence of extreme foreground confusion.
+**Description**: This research objective implements a Multi-Frequency Wiener Filter (MWF) to reconstruct the tSZ Compton-y signal by incorporating the full multi-frequency signal and noise covariance structure, including the CIB cross-power spectra. Unlike hard-nulling constraints, the MWF statistically weights the 90–857 GHz channels to balance CIB suppression against SO/Planck noise amplification, utilizing the `utils.powers` estimator to generate the required cross-frequency power spectra ($\ell \leq 2000$). To handle the 10¹⁵ variance disparity, the signal covariance matrix is regularized by incorporating the CIB auto- and cross-spectra as distinct components, effectively treating the CIB as a correlated foreground rather than a deterministic template. Cluster profiles are modeled using a beam-convolved, frequency-specific profile derived from the FLAMINGO simulation to ensure spatial fidelity at the 1 arcmin target resolution. Detection performance is evaluated through a matched-filter peak-finding algorithm applied to the reconstructed y-map, with completeness and purity quantified against the ground-truth `tsz.npy` catalog as a function of halo mass and local CIB intensity. This approach avoids the instability of rigid projection by providing a statistically optimal estimator that minimizes the mean-square error in the presence of non-Gaussian foregrounds.
 \end{IDEA}
 

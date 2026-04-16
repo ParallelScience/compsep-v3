@@ -235,28 +235,42 @@ Possible directions (not exhaustive — Denario should feel free to propose nove
 
 
 Proposed ideas:
-1. **Cross-Frequency Morphological Correlation Analysis**: Investigate the spatial scale at which the CIB and tSZ signals decorrelate. By analyzing the scale-dependent cross-correlation coefficient, we aim to determine the optimal spatial filtering required to isolate the tSZ signal from CIB-dominated high-frequency maps.
+1. **Adaptive Matched Filter with Local CIB Estimation**
+Develop a spatially varying matched filter that dynamically estimates the local CIB power spectrum within each 5° patch. By adjusting the filter kernel based on local CIB intensity rather than a global average, this approach aims to reduce false-positive detections in regions of high infrared foreground contamination.
 
-2. **Non-Gaussianity Mapping of the kSZ Effect**: Explore the spatial distribution of the kinetic Sunyaev-Zel'dovich effect to identify non-Gaussian signatures in the velocity field of the large-scale structure. This research focuses on whether the kSZ signal can act as a tracer for cosmic web filaments that are otherwise obscured by the CMB.
+2. **Bayesian Posterior Mapping for tSZ Reconstruction**
+Construct a Bayesian framework to estimate the posterior distribution of the Compton-y parameter given the multi-frequency observational constraints. By assuming a Gaussian prior on the CMB and CIB components, this method seeks to isolate the tSZ signal by marginalizing over the stochastic noise and foreground spectral signatures.
 
-3. **Transfer Function Characterization for Blind Source Separation**: Determine the effective transfer function of standard component-separation algorithms when applied to highly non-stationary noise environments. The objective is to define the limits of linear reconstruction for the tSZ signal in the presence of correlated SO-LAT noise.
+3. **Optimal Multi-Frequency Weighting via Internal Linear Combination (ILC)**
+Extend the classical ILC method to produce a minimum-variance map specifically optimized for the tSZ spectral signature. By imposing a constrained minimization of the total variance while preserving the tSZ signal, this technique aims to suppress both CIB and kSZ foregrounds without requiring an explicit model for the cluster spatial profile.
 
-4. **Baryonic Feedback Signatures in tSZ-CIB Residuals**: Assess the impact of AGN feedback physics—modeled in the FLAMINGO simulation—on the small-scale power spectrum of the tSZ signal. The goal is to constrain the relationship between cluster gas pressure profiles and the surrounding infrared-emitting galaxy populations.
+4. **Cross-Spectral Peak Detection for Cluster Validation**
+Utilize cross-correlation statistics between high-frequency (CIB-dominated) and low-frequency (tSZ-dominated) maps to act as a veto mechanism for cluster candidates. This statistical filter identifies if a potential cluster peak is likely a real physical structure or a chance alignment of CIB fluctuations, thereby improving the purity of the cluster catalog.
 
-5. **Information-Theoretic Limits of Cluster Mass Estimation**: Quantify the fundamental information loss when inferring cluster mass from integrated Compton-Y in the presence of realistic multi-frequency noise. This objective seeks to identify the "information ceiling" for mass calibration before reaching the beam-suppressed regime.
+5. **Optimal Aperture Photometry for Integrated-Y Recovery**
+Investigate the dependency of integrated Compton-Y recovery on aperture size and filter shape within a classical frequentist framework. By modeling the noise covariance across different frequencies, this study aims to define an optimal aperture scale that minimizes the variance of the mass estimate for clusters of varying angular sizes.
 
-6. **Gradient-Based Feature Extraction for Cluster Detection**: Evaluate the efficacy of using the gradient field of the sky maps, rather than raw pixel intensities, to distinguish tSZ-induced cluster signals from CMB primary anisotropies. This approach aims to reduce false-positive detections caused by accidental CMB temperature fluctuations.
+6. **Wavelet-Based Multiscale SZ Decomposition**
+Decompose the multi-frequency maps into wavelet coefficients to isolate the tSZ signal based on its characteristic spatial scale and unique frequency dependence. This method targets the separation of the compact tSZ signal from the more diffuse CMB and CIB components by exploiting the localized nature of galaxy clusters in the wavelet domain.
 
-7. **Multi-Scale Wavelet Decomposition for Component Separation**: Develop a framework to decompose the stacked signal maps into wavelet scales to isolate the tSZ signal based on its unique spatial frequency profile. This research objective tests if wavelet-based denoising can outperform standard MMF filters in high-noise, high-multipole regimes.
+7. **Frequency-Dependent Beam Deconvolution via Wiener Filtering**
+Apply a multi-channel Wiener filter to invert the frequency-specific beam convolution while simultaneously suppressing noise. This approach focuses on recovering the true 1-arcmin resolution Compton-y signal by incorporating the known beam profiles of the SO and Planck instruments into the reconstruction operator.
 
-8. **CIB-tSZ Joint Covariance Modeling**: Develop a comprehensive covariance model that accounts for the physical coupling between CIB and tSZ signals within the same dark matter halos. The objective is to produce a refined noise-mitigation strategy that accounts for signal-signal correlations rather than treating them as independent contaminants.
+8. **kSZ/tSZ Joint Statistical Separation**
+Explore the use of the distinct spectral signatures of the kSZ and tSZ effects to perform blind source separation in the presence of CMB and CIB noise. By analyzing the frequency-dependent correlation matrix of the stacked maps, this method seeks to isolate the kSZ signal, which is currently obscured by the much stronger tSZ and CIB components.
 
-9. **Phase-Consistency Analysis for Map Denoising**: Examine the phase stability of the lensed CMB signal relative to the cluster-induced tSZ signal across different frequency channels. By identifying phase-coherent structures, we aim to establish a new technique for identifying genuine astrophysical clusters amidst incoherent instrumental noise.
+9. **Likelihood-Free Statistical Thresholding for Cluster Catalogues**
+Define a detection threshold based on the distribution of the signal-to-noise ratio derived from a multi-frequency matched filter. This approach aims to establish a rigorous statistical significance level for cluster candidates that accounts for the non-Gaussianity of the CIB and the specific noise properties of the SO and Planck datasets.
 
-10. **Impact of Lensing Convergence on Cluster Signal Recovery**: Quantify how variations in the underlying lensing convergence map ($\kappa$) distort the observed Compton-y signal of high-redshift clusters. The goal is to determine if the lensing-induced bias in the tSZ profile can be corrected to improve the accuracy of cluster mass scaling relations.
+10. **Gradient-Based Cluster Morphology Analysis**
+Implement a morphological filter based on the spatial gradient of the Compton-y map to distinguish between spherical clusters and non-thermalized, merging systems. By analyzing the structural properties of detected peaks, this method aims to provide a secondary classification criterion for clusters that goes beyond simple integrated-Y measurements.
 
 
 
+Human feedback:
+Avoid machine learning approaches. Focus on classical statistical methods for cluster finding — for example matched filters, optimal filters, Bayesian detection, or classical component separation techniques. The idea should be grounded in well-established CMB/SZ methodology.
+
+Take into account the human feedback when selecting the best idea. The feedback may provide guidance on preferred research directions, constraints, or specific aspects to prioritize.
 
 
 
@@ -272,6 +286,7 @@ In <IDEA>, put the idea you have selected
 ###### PROMPT ENDS ########
 
 \begin{IDEA}
-**Baryonic Feedback Signatures in tSZ-CIB Residuals**: Assess the impact of AGN feedback physics—modeled in the FLAMINGO simulation—on the small-scale power spectrum of the tSZ signal. The goal is to constrain the relationship between cluster gas pressure profiles and the surrounding infrared-emitting galaxy populations.
+**Optimal Multi-Frequency Weighting via Internal Linear Combination (ILC)**
+Extend the classical ILC method to produce a minimum-variance map specifically optimized for the tSZ spectral signature. By imposing a constrained minimization of the total variance while preserving the tSZ signal, this technique aims to suppress both CIB and kSZ foregrounds without requiring an explicit model for the cluster spatial profile.
 \end{IDEA}
 
