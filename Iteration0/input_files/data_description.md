@@ -189,12 +189,4 @@ This is required for the pipeline controller to detect step completion.
 - Multiprocessing: limit to ~8–16 workers; set `OMP_NUM_THREADS=16`
 - Load data patch-by-patch or in small batches; avoid loading all 1523 patches simultaneously
 
-## Suggested Analyses
 
-Based on prior work, the following approaches are known to work well on this dataset:
-
-1. **Constrained ILC (cILC)** as a linear baseline — null CMB and kSZ while preserving tSZ. Use as the benchmark to beat.
-2. **Multi-scale U-Net with gated cross-attention** — use SO LAT bands (90/150/217) as primary input and Planck HFI CIB bands (353/545/857) as auxiliary spatial priors. The CIB is spatially correlated with tSZ because both trace dark matter potential wells.
-3. **Spectral difference features** — compute beam-matched difference maps (e.g., 150–90 GHz, 217–150 GHz) to suppress CMB while highlighting the tSZ spectral signature before feeding into the network.
-4. **Curriculum learning** — train first on top-20% highest-tSZ patches (massive clusters) before expanding to the full dataset.
-5. **Evaluate using**: transfer function T(ℓ) with patch-to-patch error bars, Y_SZ–M scatter (use peak tSZ as mass proxy), and residual-CIB cross-correlation to check for foreground leakage.
