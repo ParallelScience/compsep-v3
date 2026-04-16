@@ -180,6 +180,22 @@ This is required for the pipeline controller to detect step completion.
 - Full-sky tessellation at 5° step spacing (no galactic cut)
 - Gnomonic (flat-sky) projection, bilinear interpolation from HEALPix nside=8192
 
+## Suggested Research Directions: Cluster Finding
+
+The scientific focus of this project is **galaxy cluster finding** using the tSZ effect. The ground truth cluster catalog can be constructed from peaks in `tsz.npy`, and the task is to detect and characterize clusters in realistic noisy multi-frequency observations.
+
+Possible directions (not exhaustive — Denario should feel free to propose novel approaches):
+
+1. **Detection completeness and purity** — measure cluster detection performance as a function of mass (using peak Compton-y as a mass proxy) in realistic SO+Planck noise. Characterize the survey selection function.
+
+2. **Multi-frequency Matched Filter (MMF)** — implement the standard MMF (optimal linear filter matched to the tSZ spectral signature and cluster profile) and measure detection S/N, completeness, and purity vs. cluster mass. This is the classical baseline used by ACT, SPT, and Planck.
+
+3. **Deep learning cluster finder** — train a detection network (e.g., peak-finding CNN, object detection, or segmentation model) directly on the noisy multi-frequency maps. Compare against the MMF baseline in terms of completeness, purity, and mass bias.
+
+4. **CIB contamination and bias** — quantify how CIB confusion at high frequencies biases cluster detection completeness, purity, and recovered integrated-Y. Can multi-frequency information be used to mitigate CIB-induced false detections?
+
+5. **Mass calibration** — given detected clusters, how accurately can the integrated Compton-Y (aperture-summed within some radius) be recovered as a function of cluster mass and noise level?
+
 ## Hardware and Environment
 
 - Python: `/opt/denario-venv/bin/python`
