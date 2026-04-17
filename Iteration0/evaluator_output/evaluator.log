@@ -1,0 +1,1580 @@
+
+###### PROMPT BEGINS ########
+Human: You are provided with the following inputs:
+
+1) A description of a dataset
+2) A current scientific idea or hypothesis
+3) A current research plan
+4) The results obtained from executing that plan
+5) A cumulative report documenting all previous analyses performed on the same dataset
+
+Your task is to critically evaluate the current analysis in the context of all prior work.
+The goal is not to summarize, but to provide actionable, technically informed feedback that will improve the scientific quality, robustness, and insight of future iterations.
+
+Assume that:
+- The dataset is fixed
+- Prior analyses are known and accessible
+- Future agents will use your feedback to design the next research iteration
+
+**Evaluation Guidelines (must follow)**
+**Be a hard critic.**
+    - Identify weaknesses, gaps, overclaims, and missed opportunities.
+    - Treat the analysis as if you were a skeptical but constructive reviewer.
+
+**No Redundant Suggestions.**
+- Do not propose repeating analyses already performed unless:
+    - they failed,
+    - they were methodologically flawed, or
+    - you can clearly articulate how to improve them.
+
+**Context-Aware Critique.**
+- Explicitly take into account:
+    - what has already been tried,
+    - what worked,
+    - what did not,
+    - and what assumptions are now constrained by prior results.
+- For things that failed, state whether they are strictly neccesary or could be done in another way
+
+**Insight-Oriented Feedback.**
+- Focus on suggestions that could:
+    - strengthen causal interpretation,
+    - reduce uncertainty or bias,
+    - reveal new structure in the data,
+    - or test alternative explanations.
+- Avoid superficial “more data / more models” recommendations unless justified.
+
+**Big picture**
+- Your feedback must be used to improve the quality of the work but not to just make it overly complicated
+- We want to perform the minimum analysis needed to yield robust and sound conclusions and to have enough material for a paper
+- Ideally, if a method is simpler and yield the same results, the simpler should be used as will be more interpretable
+- Ultimately, we are interested in learning about science, not super technical details of the way to analyze the data
+
+**Forward-Looking.**
+- Your feedback should not only improve performance, but also help the project learn something new.
+
+Data description:
+
+# Dataset Description: FLAMINGO Lensed Component-Separation Maps
+
+This dataset consists of flat-sky cut maps derived from full-sky maps of the cosmic microwave background (CMB), thermal and kinetic Sunyaev-Zel'dovich effects (tSZ/kSZ), and the cosmic infrared background (CIB). The sky signal maps originate from the FLAMINGO L1_m9 HYDRO_FIDUCIAL simulation (lightcone0, Jeger rotation) — a large-volume (1 Gpc comoving box) hydrodynamical simulation with self-consistent baryonic physics (radiative cooling, star formation, AGN feedback, diffuse gas flows).
+
+The CMB is a Gaussian realization lensed by the FLAMINGO convergence map (κ) via lenspyx, using Planck-like cosmology (h=0.6736, n_s=0.965, A_s=2.1e-9, seed=42).
+
+---
+
+## File Inventory (absolute paths, verified)
+
+All files are under `/home/node/data/compsep_data/cut_maps/`.
+
+### Individual component maps — ground truth, 1 arcmin beam
+Shape: **(1523, 256, 256)**, dtype **float64**
+
+- `/home/node/data/compsep_data/cut_maps/lensed_cmb.npy` — Lensed CMB temperature, µK_CMB
+- `/home/node/data/compsep_data/cut_maps/tsz.npy` — tSZ Compton-y parameter, dimensionless
+- `/home/node/data/compsep_data/cut_maps/ksz.npy` — kSZ Doppler-b parameter, dimensionless
+- `/home/node/data/compsep_data/cut_maps/cib_353.npy` — CIB at 353 GHz, Jy/sr
+- `/home/node/data/compsep_data/cut_maps/cib_545.npy` — CIB at 545 GHz, Jy/sr
+- `/home/node/data/compsep_data/cut_maps/cib_857.npy` — CIB at 857 GHz, Jy/sr
+
+### Stacked (observed) signal maps — frequency-specific beam, no noise
+Shape: **(1523, 256, 256)**, dtype **float64**, units **µK_CMB**
+
+- `/home/node/data/compsep_data/cut_maps/stacked_90.npy` — 90 GHz total signal, beam FWHM 2.2 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_150.npy` — 150 GHz total signal, beam FWHM 1.4 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_217.npy` — 217 GHz total signal, beam FWHM 1.0 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_353.npy` — 353 GHz total signal, beam FWHM 4.5 arcmin (Planck HFI)
+- `/home/node/data/compsep_data/cut_maps/stacked_545.npy` — 545 GHz total signal, beam FWHM 4.72 arcmin (Planck HFI)
+- `/home/node/data/compsep_data/cut_maps/stacked_857.npy` — 857 GHz total signal, beam FWHM 4.42 arcmin (Planck HFI)
+
+The stacked signal at each frequency is: signal(freq) = CIB(freq)*jysr2uk(freq) + tSZ*f_tSZ(freq) + kSZ*f_kSZ + lensed_CMB, then smoothed with the frequency-specific beam. Individual component maps have a 1 arcmin beam.
+
+### Noise maps
+
+**Simons Observatory (SO) LAT noise** — 3000 independent Gaussian realizations
+Shape: **(3000, 256, 256)**, dtype **float64**, units **µK_CMB**
+
+- `/home/node/data/compsep_data/cut_maps/so_noise/90.npy`
+- `/home/node/data/compsep_data/cut_maps/so_noise/150.npy`
+- `/home/node/data/compsep_data/cut_maps/so_noise/217.npy`
+
+SO noise is drawn from the SO LAT v3.1 temperature noise power spectrum (mode 2, elevation 50°, f_sky=0.4). 90 and 150 GHz are correlated (Cholesky decomposition); 217 GHz is independent. **The SO noise index does NOT need to match the sky patch index — sample it randomly.**
+
+**Planck FFP10 noise** — 100 MC realizations per high-frequency channel
+Shape per file: **(1523, 256, 256)**, dtype **float64**
+Filename pattern: `planck_noise_{freq}_{i}.npy`, freq ∈ {353, 545, 857}, i ∈ {0, …, 99}
+
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_353_{0..99}.npy` — units: K_CMB → multiply by 1e6 to get µK_CMB
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_545_{0..99}.npy` — units: MJy/sr → multiply by 1e6 * jysr2uk(545) to get µK_CMB
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_857_{0..99}.npy` — units: MJy/sr → multiply by 1e6 * jysr2uk(857) to get µK_CMB
+
+**CRITICAL: For Planck noise, the patch index MUST match the sky patch index (i_patch == i_planck_patch_dim). Load with `np.load(...)[ i_patch ]`.**
+
+---
+
+## Spectral Response and Utility Functions
+
+A `utils.py` module is available at `/home/node/data/compsep_data/utils.py`. **Always import using the absolute path:**
+
+```python
+import sys
+sys.path.insert(0, '/home/node/data/compsep_data')
+import utils
+```
+
+Key functions:
+- `utils.tsz(freq_ghz)` — tSZ spectral response in µK_CMB per Compton-y unit. Example values: tsz(90)≈-4.35e6, tsz(150)≈-2.60e6, tsz(217)≈-2.28e4, tsz(353)≈+3.05e6
+- `utils.ksz(freq_ghz)` — kSZ spectral response in µK_CMB (≈ -T_CMB_µK ≈ -2.726e6, frequency-independent)
+- `utils.jysr2uk(freq_ghz)` — converts Jy/sr to µK_CMB for CIB at given frequency
+- `utils.powers(a, b, ps=10, ell_n=199, window_alpha=None)` — flat-sky angular auto/cross power spectrum
+
+**IMPORTANT — `utils.powers` usage notes:**
+- Always pass `window_alpha=0.5` (Hann taper) when computing cross-power spectra or the cross-correlation coefficient r_ℓ. Without windowing, the raw flat-sky FFT produces r_ℓ ≈ 0 even for perfectly correlated maps due to edge effects and phase artifacts. This is a known numerical issue — do NOT interpret r_ℓ = 0 without windowing as a true absence of correlation.
+- Verify the estimator first: compute the power spectrum of Gaussian white noise and confirm it matches the theoretical expectation (σ² × pixel_area). If not, the pixel-to-physical mapping is wrong.
+
+---
+
+## Critical Signal Properties — Read Before Designing Any Analysis
+
+### Dynamic range warning (ESSENTIAL)
+The tSZ signal is orders of magnitude weaker than the other components:
+
+| Component | Typical variance |
+|-----------|-----------------|
+| Lensed CMB | ~1.25×10⁴ µK² |
+| CIB at 857 GHz | ~3.35×10¹⁰ (Jy/sr)² |
+| tSZ (Compton-y) | ~3.28×10⁻¹² |
+| kSZ | ~1.57×10⁻¹² |
+
+**The tSZ signal is 10¹⁵ times weaker in variance than the CIB at 857 GHz and 10⁷ times weaker than the CMB.**
+
+Consequences for machine learning:
+1. **Always standardize the tSZ target maps** (zero mean, unit variance) before training. Using raw Compton-y values as training targets will cause the network to treat the signal as numerical noise and collapse to predicting zero.
+2. **Never use a global L1/MSE loss on raw tSZ maps** — the background pixels (y ≈ 0) will dominate and the model will learn to predict a flat, near-zero map (model collapse). Use a weighted loss that upweights cluster pixels (y > 10⁻⁷) by a factor of 10³–10⁴, or use a focal/masked loss.
+3. **The tSZ signal is spatially extremely sparse** — massive galaxy clusters occupy <1% of pixels. Any loss function that treats all pixels equally will be dominated by empty-sky pixels.
+
+### Beam convolution (already applied to stacked maps)
+The `stacked_*` maps are already beam-convolved. The ground truth (`tsz.npy`, `lensed_cmb.npy`, etc.) has a 1 arcmin beam. The SR task is to recover 1-arcmin features from beam-smeared inputs:
+- At ℓ > 3000 (< 3.6 arcmin), the SO LAT signal is beam-suppressed and noise-dominated — deterministic pixel-phase recovery is information-theoretically impossible at these scales. Do NOT use a pixel-wise loss to penalize the model for failing to recover high-ℓ phases.
+- The cross-correlation coefficient r_ℓ → 0 at high ℓ is physically expected, not a pipeline bug. Report the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true) instead.
+
+### Spectral loss warning
+A logarithmic spectral consistency loss (penalizing |log C_ℓ^pred - log C_ℓ^true|) will cause catastrophic hallucination. The model will inject non-physical structures to satisfy global power constraints in noise-dominated patches, producing a hallucination fraction of >6000% on pure noise inputs. If a spectral loss is used, it must be:
+- Linear (not logarithmic)
+- Applied only to ℓ > 1000 (not low ℓ which is dominated by the CMB)
+- Applied only to high-SNR multipole bins
+
+---
+
+## Correct Loading Pattern
+
+```python
+import sys, os
+sys.path.insert(0, '/home/node/data/compsep_data')
+import utils
+import numpy as np
+
+os.environ['OMP_NUM_THREADS'] = '16'
+
+BASE = '/home/node/data/compsep_data/cut_maps'
+n_patch = 1523
+n_planck = 100
+n_so = 3000
+
+rng = np.random.default_rng(seed=42)
+i_so_indices = rng.integers(0, n_so, size=n_patch)       # random SO noise per patch
+i_planck_indices = rng.integers(0, n_planck, size=n_patch) # random Planck MC per patch
+
+# Load a single patch (index i_patch):
+i_patch = 0
+i_so = i_so_indices[i_patch]
+i_planck = i_planck_indices[i_patch]
+
+signal_90  = np.load(f'{BASE}/stacked_90.npy')[i_patch]   # µK_CMB
+signal_150 = np.load(f'{BASE}/stacked_150.npy')[i_patch]  # µK_CMB
+signal_217 = np.load(f'{BASE}/stacked_217.npy')[i_patch]  # µK_CMB
+signal_353 = np.load(f'{BASE}/stacked_353.npy')[i_patch]  # µK_CMB
+signal_545 = np.load(f'{BASE}/stacked_545.npy')[i_patch]  # µK_CMB
+signal_857 = np.load(f'{BASE}/stacked_857.npy')[i_patch]  # µK_CMB
+
+noise_90  = np.load(f'{BASE}/so_noise/90.npy')[i_so]      # µK_CMB
+noise_150 = np.load(f'{BASE}/so_noise/150.npy')[i_so]     # µK_CMB
+noise_217 = np.load(f'{BASE}/so_noise/217.npy')[i_so]     # µK_CMB
+
+pn_353_raw = np.load(f'{BASE}/planck_noise/planck_noise_353_{i_planck}.npy')[i_patch]
+pn_545_raw = np.load(f'{BASE}/planck_noise/planck_noise_545_{i_planck}.npy')[i_patch]
+pn_857_raw = np.load(f'{BASE}/planck_noise/planck_noise_857_{i_planck}.npy')[i_patch]
+noise_353 = pn_353_raw * 1e6                           # K_CMB → µK_CMB
+noise_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)     # MJy/sr → µK_CMB
+noise_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)     # MJy/sr → µK_CMB
+
+obs_90  = signal_90  + noise_90
+obs_150 = signal_150 + noise_150
+obs_217 = signal_217 + noise_217
+obs_353 = signal_353 + noise_353
+obs_545 = signal_545 + noise_545
+obs_857 = signal_857 + noise_857
+
+# Ground truth
+tsz_map = np.load(f'{BASE}/tsz.npy')[i_patch]        # Compton-y, dimensionless
+cib_353 = np.load(f'{BASE}/cib_353.npy')[i_patch]    # Jy/sr
+```
+
+**ALWAYS print explicit completion messages at the end of every script step**, e.g.:
+```python
+print(f'Step N completed successfully. Output shape: {array.shape}, saved to data/output.npy')
+```
+This is required for the pipeline controller to detect step completion.
+
+**Do NOT save PyTorch model weights (.pth files) to the experiment output directory** — they exceed GitHub's 100 MB file size limit and will block git pushes. Save model weights to `/tmp/` instead, e.g. `torch.save(model.state_dict(), '/tmp/best_model.pth')`.
+
+---
+
+## Patch Geometry
+
+- 1523 patches, 5°×5°, 256×256 pixels, ≈1.17 arcmin/pixel
+- Full-sky tessellation at 5° step spacing (no galactic cut)
+- Gnomonic (flat-sky) projection, bilinear interpolation from HEALPix nside=8192
+
+## Suggested Research Directions: Cluster Finding
+
+The scientific focus of this project is **galaxy cluster finding** using the tSZ effect. The ground truth cluster catalog can be constructed from peaks in `tsz.npy`, and the task is to detect and characterize clusters in realistic noisy multi-frequency observations.
+
+Possible directions (not exhaustive — Denario should feel free to propose novel approaches):
+
+1. **Detection completeness and purity** — measure cluster detection performance as a function of mass (using peak Compton-y as a mass proxy) in realistic SO+Planck noise. Characterize the survey selection function.
+
+2. **Multi-frequency Matched Filter (MMF)** — implement the standard MMF (optimal linear filter matched to the tSZ spectral signature and cluster profile) and measure detection S/N, completeness, and purity vs. cluster mass. This is the classical baseline used by ACT, SPT, and Planck.
+
+3. **Deep learning cluster finder** — train a detection network (e.g., peak-finding CNN, object detection, or segmentation model) directly on the noisy multi-frequency maps. Compare against the MMF baseline in terms of completeness, purity, and mass bias.
+
+4. **CIB contamination and bias** — quantify how CIB confusion at high frequencies biases cluster detection completeness, purity, and recovered integrated-Y. Can multi-frequency information be used to mitigate CIB-induced false detections?
+
+5. **Mass calibration** — given detected clusters, how accurately can the integrated Compton-Y (aperture-summed within some radius) be recovered as a function of cluster mass and noise level?
+
+## Hardware and Environment
+
+- Python: `/opt/denario-venv/bin/python`
+- 64 vCPUs (AMD Ryzen Threadripper PRO 9995WX), 128 GB RAM
+- NVIDIA RTX PRO 6000 Blackwell Edition, 96 GB VRAM, CUDA 13.0
+- PyTorch GPU: use `device='cuda'`
+- Multiprocessing: limit to ~8–16 workers; set `OMP_NUM_THREADS=16`
+- Load data patch-by-patch or in small batches; avoid loading all 1523 patches simultaneously
+
+
+
+
+Current idea: 
+**Title**: Cross-Spectral Wiener Filtering for Optimal tSZ Extraction and Cluster Detection
+
+**Description**: This research objective implements a Multi-Frequency Wiener Filter (MWF) to reconstruct the tSZ Compton-y signal by incorporating the full multi-frequency signal and noise covariance structure, including the CIB cross-power spectra. Unlike hard-nulling constraints, the MWF statistically weights the 90–857 GHz channels to balance CIB suppression against SO/Planck noise amplification, utilizing the `utils.powers` estimator to generate the required cross-frequency power spectra ($\ell \leq 2000$). To handle the 10¹⁵ variance disparity, the signal covariance matrix is regularized by incorporating the CIB auto- and cross-spectra as distinct components, effectively treating the CIB as a correlated foreground rather than a deterministic template. Cluster profiles are modeled using a beam-convolved, frequency-specific profile derived from the FLAMINGO simulation to ensure spatial fidelity at the 1 arcmin target resolution. Detection performance is evaluated through a matched-filter peak-finding algorithm applied to the reconstructed y-map, with completeness and purity quantified against the ground-truth `tsz.npy` catalog as a function of halo mass and local CIB intensity. This approach avoids the instability of rigid projection by providing a statistically optimal estimator that minimizes the mean-square error in the presence of non-Gaussian foregrounds.
+
+Current research plan:
+1. **Data Preprocessing and Normalization**:
+   - Implement a data loader that performs on-the-fly noise injection: randomly sample SO noise indices and match Planck noise indices to the patch index. Apply unit conversions (K_CMB to µK_CMB) and frequency-dependent scaling.
+   - Standardize the `tsz.npy` ground truth maps (zero mean, unit variance) and store the transformation parameters (mean/std) to allow for de-normalization of the final reconstructed y-map back to physical Compton-y units.
+   - Verify the dynamic range of the input maps to ensure the 10¹⁵ variance disparity is handled using `float64` precision throughout the pipeline.
+
+2. **Power Spectrum and Covariance Estimation**:
+   - Compute auto- and cross-power spectra for all 6 frequency channels and the tSZ ground truth using `utils.powers` with `window_alpha=0.5` for all terms.
+   - Perform this estimation on a representative subset of 500 patches to ensure statistical stability and computational efficiency.
+   - Construct the total observed signal covariance matrix $S_{\ell, \text{obs}}$ (including CMB, tSZ, kSZ, and CIB) and the tSZ-specific cross-correlation vector $S_{\ell, \text{tSZ-obs}}$.
+   - Validate the estimator by computing the power spectrum of Gaussian white noise to confirm it matches the theoretical expectation ($\sigma^2 \times \text{pixel\_area}$).
+
+3. **Multi-Frequency Wiener Filter (MWF) Construction**:
+   - Define the MWF operator $W_\ell = (S_{\ell, \text{obs}} + N_\ell)^{-1} S_{\ell, \text{tSZ-obs}}$, where $N_\ell$ includes the CIB auto- and cross-spectra as correlated foreground noise.
+   - Apply Tikhonov regularization (adding a small diagonal term) to the covariance matrix $(S_{\ell, \text{obs}} + N_\ell)$ before inversion to ensure numerical stability against the 10¹⁵ dynamic range disparity.
+   - Parallelize the construction of these matrices across available CPU cores.
+
+4. **Cluster Profile Modeling**:
+   - Derive a frequency-specific, beam-convolved cluster profile by stacking `tsz.npy` maps centered on high-mass halos.
+   - Ensure the profile accounts for the specific beam FWHM of each frequency channel (SO LAT vs. Planck HFI) to maintain spatial fidelity.
+
+5. **Reconstruction and Validation**:
+   - Apply the MWF operator in the harmonic domain to the multi-frequency observation vector to produce the reconstructed Compton-y map.
+   - Compute the empirical transfer function $T(\ell) = P_{\text{cross}}(\text{pred}, \text{true}) / P_{\text{auto}}(\text{true})$ and compare it against the theoretical expectation, masking noise-dominated regimes ($\ell > 3000$) to avoid artifacts.
+   - Evaluate reconstruction quality using a linear spectral loss for $\ell > 1000$ and compare performance against a standard Internal Linear Combination (ILC) baseline.
+
+6. **Cluster Detection Pipeline**:
+   - Perform peak-finding on the reconstructed y-map using a thresholding approach (e.g., SNR > 5).
+   - Use the beam-convolved cluster profile as a template to refine candidate detections and handle overlapping profiles.
+   - Account for the "look-elsewhere effect" when defining the detection threshold.
+
+7. **Performance Quantification**:
+   - Calculate detection completeness and purity by comparing the candidate catalog against the ground-truth catalog derived from `tsz.npy`.
+   - Evaluate performance as a function of halo mass (using peak Compton-y as a proxy) and local CIB intensity.
+   - Measure the mass bias in the recovered integrated-Y for detected clusters.
+
+8. **Final Reporting**:
+   - Compile the results into a summary of the MWF performance, including the transfer function, completeness/purity curves, and the impact of CIB contamination.
+   - Ensure all intermediate outputs are saved to the designated directory and completion messages are printed for each step.
+
+Current results:
+# Cross-Spectral Wiener Filtering for Optimal tSZ Extraction and Cluster Detection: Final Results and Interpretation
+
+## 1. Introduction and Methodological Overview
+
+The extraction of the thermal Sunyaev-Zel'dovich (tSZ) effect from multi-frequency cosmic microwave background (CMB) observations is a fundamental challenge in modern observational cosmology. The tSZ signal, which traces the integrated line-of-sight thermal pressure of ionized gas in galaxy clusters, is spatially sparse and extremely weak compared to primary CMB anisotropies, instrumental noise, and foregrounds such as the Cosmic Infrared Background (CIB). 
+
+In this study, we implemented and evaluated a Multi-Frequency Wiener Filter (MWF) to reconstruct the tSZ Compton-$y$ map from simulated Simons Observatory (SO) LAT (90, 150, 217 GHz) and Planck HFI (353, 545, 857 GHz) observations. Unlike standard Internal Linear Combination (ILC) methods that rely on variance-weighted hard-nulling or simple spectral matching, the MWF leverages the full empirical auto- and cross-power spectra of the observed signals. By treating the CIB and instrumental noise as a unified, correlated noise covariance matrix $N_\ell$, the MWF provides a statistically optimal estimator that minimizes the mean-square error of the reconstructed $y$-map. 
+
+This report details the quantitative performance of the MWF pipeline, compares it against an ILC baseline, and provides a physical interpretation of the results, with a specific focus on cluster detection completeness, purity, and the mitigating effects of the MWF on CIB contamination.
+
+---
+
+## 2. Signal Properties and the Dynamic Range Challenge
+
+A critical preliminary step in our analysis was quantifying the variance disparity across the constituent components. The FLAMINGO L1_m9 HYDRO_FIDUCIAL simulations reveal an extreme dynamic range that dictates the numerical approach to covariance inversion.
+
+### Table 1: Component and Stacked Signal Variances
+| Component / Channel | Variance | Units |
+| :--- | :--- | :--- |
+| **Ground Truth Components** | | |
+| Lensed CMB | $1.26 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| CIB at 857 GHz | $3.36 \times 10^{10}$ | $(\text{Jy/sr})^2$ |
+| tSZ Compton-$y$ | $3.28 \times 10^{-12}$ | Dimensionless |
+| kSZ Doppler-$b$ | $1.57 \times 10^{-12}$ | Dimensionless |
+| **Stacked Observations** | | |
+| 90 GHz (SO LAT) | $1.25 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 150 GHz (SO LAT) | $1.26 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 217 GHz (SO LAT) | $1.28 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 353 GHz (Planck) | $1.46 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 545 GHz (Planck) | $5.18 \times 10^5$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 857 GHz (Planck) | $3.84 \times 10^9$ | $\mu\text{K}_{\text{CMB}}^2$ |
+
+As shown in Table 1, the tSZ signal variance is approximately $10^{15}$ times weaker than the CIB at 857 GHz (when converted to comparable temperature units) and $10^7$ times weaker than the primary CMB. 
+
+**Physical Interpretation:** The 857 GHz and 545 GHz channels are overwhelmingly dominated by the CIB, which traces dusty star-forming galaxies. While these channels are crucial for anchoring the dust spectral energy distribution (SED) and removing it from the lower-frequency channels, their massive variance poses a severe numerical risk. During the construction of the MWF, the inversion of the $(S_{\ell, \text{obs}} + N_\ell)$ covariance matrix is highly susceptible to singularity or floating-point truncation errors. To counteract this, we successfully applied Tikhonov regularization ($\epsilon = 10^{-5}$ on the diagonal) and standardized the tSZ target maps ($\mu = 1.50 \times 10^{-6}$, $\sigma = 1.81 \times 10^{-6}$). This ensured stable filter weights across all multipoles.
+
+---
+
+## 3. Harmonic Domain Reconstruction: MWF vs. ILC
+
+The reconstruction quality was first evaluated in the harmonic domain using the empirical transfer function $T(\ell) = P_{\text{cross}}(\text{pred}, \text{true}) / P_{\text{auto}}(\text{true})$ and the cross-correlation coefficient $r_\ell$.
+
+### Transfer Function and Cross-Correlation
+The MWF demonstrates a clear theoretical and practical advantage over the ILC baseline:
+1. **Low to Intermediate Multipoles ($\ell < 2000$):** Both MWF and ILC successfully recover the tSZ signal, with $r_\ell$ approaching unity. However, the MWF exhibits a more stable transfer function. The ILC, which relies on a uniform-weight linear combination based on inverse pixel variance, struggles to optimally suppress the spatially correlated CIB, leading to excess power (and thus $T(\ell) > 1$ artifacts) in intermediate $\ell$ bins.
+2. **High Multipoles ($\ell > 3000$):** In this regime, the physical signal is heavily suppressed by the instrumental beams. Furthermore, the SO LAT noise power spectrum dominates the tSZ power. The MWF naturally rolls off, driving $T(\ell) \to 0$ and $r_\ell \to 0$. This is the mathematically correct behavior for a Wiener filter: when the Signal-to-Noise Ratio (SNR) drops below unity, the optimal mean-square-error estimator suppresses the prediction to avoid hallucinating noise as signal. Conversely, the ILC baseline forces a spectral combination regardless of the local SNR, resulting in severe noise amplification at high $\ell$.
+
+**Limitations of the Wiener Filter:** While the MWF minimizes global variance, its aggressive suppression at high $\ell$ means that the sharpest features of cluster cores (scales $< 1$ arcmin) are smoothed out. Consequently, the reconstructed $y$-map is a low-pass filtered version of the truth. This necessitates the use of beam-convolved, frequency-specific cluster profiles during the matched-filter detection phase to ensure the spatial templates match the filtered reality.
+
+---
+
+## 4. Cluster Detection Pipeline: Completeness and Purity
+
+To quantify the scientific utility of the reconstructions, we applied a spatial matched filter to both the MWF and ILC $y$-maps, utilizing the radially averaged, beam-convolved cluster profiles. Candidate clusters were extracted using local peak-finding at SNR > 4 and SNR > 5 thresholds.
+
+### Table 2: Cluster Detection Yields
+| Catalog | SNR > 4 Candidates | SNR > 5 Candidates |
+| :--- | :--- | :--- |
+| **Ground Truth ($y > 10^{-6}$)** | N/A | 742,734 |
+| **MWF Reconstruction** | 6,745 | 1,488 |
+| **ILC Baseline** | 8,246 | 1,692 |
+
+*Note: The ground truth catalog contains all halos down to $y = 10^{-6}$, but only a fraction of these are massive enough to be detectable above the noise floor.*
+
+### Interpretation of Detection Yields
+At both SNR thresholds, the ILC baseline produces significantly more candidate detections than the MWF. Cross-matching these candidates with the ground-truth catalog reveals that the excess ILC candidates are predominantly **false positives**.
+
+1. **Purity:** The MWF achieves substantially higher purity across the recovered Compton-$y$ mass range. Because the ILC does not account for the off-diagonal cross-frequency covariance of the CIB, positive CIB fluctuations at high frequencies leak into the ILC $y$-map, creating artificial peaks that the matched filter misidentifies as clusters. The MWF, by explicitly modeling the CIB cross-spectra in $N_\ell$, optimally de-weights these modes, drastically reducing the false discovery rate.
+2. **Completeness:** For high-mass clusters (true peak $y > 5 \times 10^{-5}$), both methods achieve near 100% completeness. However, in the intermediate mass regime, the MWF provides a superior completeness-to-purity trade-off.
+
+---
+
+## 5. The Impact of CIB Contamination
+
+One of the most significant findings of this study is the differential impact of the Cosmic Infrared Background on cluster detection.
+
+- **ILC Degradation:** The purity of the ILC catalog drops precipitously in regions of high CIB intensity. The ILC algorithm interprets the rising CIB SED as a combination of CMB and noise, failing to null it effectively because the tSZ spectral response (which is positive at 353 GHz) is partially degenerate with the CIB spectrum.
+- **MWF Robustness:** The MWF maintains a remarkably flat purity curve even in regions with high local CIB intensity. By utilizing the cross-power spectra between the 353, 545, and 857 GHz channels, the MWF recognizes the spatial signature of the CIB and statistically separates it from the tSZ effect.
+
+**Physical Takeaway:** Multi-frequency information *can* be used to mitigate CIB-induced false detections, but only if the spatial covariance (power spectra) of the foregrounds is explicitly modeled. Hard-nulling or variance-weighting (ILC) is insufficient for non-Gaussian, highly correlated foregrounds like the CIB.
+
+---
+
+## 6. Mass Calibration and Bias
+
+Finally, we evaluated the accuracy of the recovered integrated Compton-$Y$ (aperture-summed within a 3-pixel radius) as a proxy for cluster mass.
+
+1. **Scatter in Recovered $Y$:** The scatter plot of Recovered vs. True Integrated $Y$ demonstrates that the MWF yields a tighter relation with lower variance than the ILC. The ILC exhibits significant upward scatter at low masses, a classic manifestation of Eddington bias exacerbated by unresolved CIB point sources blending with the tSZ decrement/increment.
+2. **Mass Bias:** The fractional mass bias, defined as $(\text{Recovered } Y - \text{True } Y) / \text{True } Y$, reveals a fundamental trade-off.
+   - The **ILC** shows a net positive bias at low masses due to the aforementioned CIB leakage and noise rectification by the peak-finding algorithm.
+   - The **MWF** exhibits a slight *negative* bias (suppression) across the mass range. This is a known property of Wiener filters: because the filter minimizes the mean-square error by multiplying the observation by $S/(S+N)$, the recovered signal is always biased toward zero by a factor of $(1 + N/S)^{-1}$. While this suppression guarantees higher purity and lower overall MSE, it requires that the final cluster catalog be calibrated using a mass-observable scaling relation derived from simulations to correct for the Wiener filter bias.
+
+---
+
+## 7. Conclusion
+
+This research successfully implemented a Multi-Frequency Wiener Filter to extract the tSZ signal from simulated SO LAT and Planck HFI observations. By rigorously handling the $10^{15}$ variance disparity between the CIB and the tSZ signal through Tikhonov regularization, and by explicitly modeling the cross-frequency covariance of the foregrounds, the MWF significantly outperforms a standard ILC baseline.
+
+**Key Findings:**
+- The MWF provides a stable harmonic transfer function that optimally suppresses noise at $\ell > 3000$, avoiding the catastrophic noise amplification seen in ILC approaches.
+- In the spatial domain, the MWF yields a highly pure cluster catalog (1,488 candidates at SNR > 5), effectively eliminating the thousands of CIB-induced false positives that plague the ILC baseline.
+- The MWF is highly robust to local CIB contamination, maintaining high purity even in regions of intense 857 GHz emission.
+- While the MWF introduces a predictable, scale-dependent negative mass bias due to its $S/(S+N)$ formulation, the resulting integrated-$Y$ scatter is significantly tighter, allowing for more precise cosmological mass calibration once the bias is forward-modeled.
+
+These results underscore the necessity of incorporating spatial covariance priors when separating weak, non-Gaussian signals from complex astrophysical foregrounds.
+
+Report with previous results:
+
+
+**Respond in exactly this format:**
+
+\\begin{FEEDBACK}
+<FEEDBACK>
+\\end{FEEDBACK}
+
+In <FEEDBACK>, put your evaluation.
+
+###### PROMPT ENDS ########
+
+
+###### PROMPT BEGINS ########
+Human: You are provided with the following inputs:
+
+1) A description of a dataset
+2) A current scientific idea or hypothesis
+3) A current research plan
+4) The results obtained from executing that plan
+
+**Your task is to assess whether any limitations, failures, or ambiguities in the analysis are directly attributable to constraints described in the dataset description.**
+
+Examples of such constraints include (but are not limited to):
+- required preprocessing steps or exclusions,
+- missing variables or incomplete coverage,
+- limited sample size or class imbalance,
+- measurement noise, censoring, or aggregation,
+- assumptions imposed by how the data were collected or curated.
+
+**Scope restriction (important)**:
+- Focus only on the dataset description.
+- Do not critique the scientific idea, hypothesis, or research plan.
+- Do not suggest alternative methods or models.
+- Other agents are responsible for methodological or conceptual feedback.
+
+**If a data-level constraint plausibly explains observed failures or weak results, describe:**
+- which constraint is responsible,
+- how it limits the analysis,
+- and what type of conclusions are affected.
+
+If no such constraints are evident, explicitly state that the dataset description does not appear to explain the observed issues.
+
+Data description:
+
+# Dataset Description: FLAMINGO Lensed Component-Separation Maps
+
+This dataset consists of flat-sky cut maps derived from full-sky maps of the cosmic microwave background (CMB), thermal and kinetic Sunyaev-Zel'dovich effects (tSZ/kSZ), and the cosmic infrared background (CIB). The sky signal maps originate from the FLAMINGO L1_m9 HYDRO_FIDUCIAL simulation (lightcone0, Jeger rotation) — a large-volume (1 Gpc comoving box) hydrodynamical simulation with self-consistent baryonic physics (radiative cooling, star formation, AGN feedback, diffuse gas flows).
+
+The CMB is a Gaussian realization lensed by the FLAMINGO convergence map (κ) via lenspyx, using Planck-like cosmology (h=0.6736, n_s=0.965, A_s=2.1e-9, seed=42).
+
+---
+
+## File Inventory (absolute paths, verified)
+
+All files are under `/home/node/data/compsep_data/cut_maps/`.
+
+### Individual component maps — ground truth, 1 arcmin beam
+Shape: **(1523, 256, 256)**, dtype **float64**
+
+- `/home/node/data/compsep_data/cut_maps/lensed_cmb.npy` — Lensed CMB temperature, µK_CMB
+- `/home/node/data/compsep_data/cut_maps/tsz.npy` — tSZ Compton-y parameter, dimensionless
+- `/home/node/data/compsep_data/cut_maps/ksz.npy` — kSZ Doppler-b parameter, dimensionless
+- `/home/node/data/compsep_data/cut_maps/cib_353.npy` — CIB at 353 GHz, Jy/sr
+- `/home/node/data/compsep_data/cut_maps/cib_545.npy` — CIB at 545 GHz, Jy/sr
+- `/home/node/data/compsep_data/cut_maps/cib_857.npy` — CIB at 857 GHz, Jy/sr
+
+### Stacked (observed) signal maps — frequency-specific beam, no noise
+Shape: **(1523, 256, 256)**, dtype **float64**, units **µK_CMB**
+
+- `/home/node/data/compsep_data/cut_maps/stacked_90.npy` — 90 GHz total signal, beam FWHM 2.2 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_150.npy` — 150 GHz total signal, beam FWHM 1.4 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_217.npy` — 217 GHz total signal, beam FWHM 1.0 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_353.npy` — 353 GHz total signal, beam FWHM 4.5 arcmin (Planck HFI)
+- `/home/node/data/compsep_data/cut_maps/stacked_545.npy` — 545 GHz total signal, beam FWHM 4.72 arcmin (Planck HFI)
+- `/home/node/data/compsep_data/cut_maps/stacked_857.npy` — 857 GHz total signal, beam FWHM 4.42 arcmin (Planck HFI)
+
+The stacked signal at each frequency is: signal(freq) = CIB(freq)*jysr2uk(freq) + tSZ*f_tSZ(freq) + kSZ*f_kSZ + lensed_CMB, then smoothed with the frequency-specific beam. Individual component maps have a 1 arcmin beam.
+
+### Noise maps
+
+**Simons Observatory (SO) LAT noise** — 3000 independent Gaussian realizations
+Shape: **(3000, 256, 256)**, dtype **float64**, units **µK_CMB**
+
+- `/home/node/data/compsep_data/cut_maps/so_noise/90.npy`
+- `/home/node/data/compsep_data/cut_maps/so_noise/150.npy`
+- `/home/node/data/compsep_data/cut_maps/so_noise/217.npy`
+
+SO noise is drawn from the SO LAT v3.1 temperature noise power spectrum (mode 2, elevation 50°, f_sky=0.4). 90 and 150 GHz are correlated (Cholesky decomposition); 217 GHz is independent. **The SO noise index does NOT need to match the sky patch index — sample it randomly.**
+
+**Planck FFP10 noise** — 100 MC realizations per high-frequency channel
+Shape per file: **(1523, 256, 256)**, dtype **float64**
+Filename pattern: `planck_noise_{freq}_{i}.npy`, freq ∈ {353, 545, 857}, i ∈ {0, …, 99}
+
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_353_{0..99}.npy` — units: K_CMB → multiply by 1e6 to get µK_CMB
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_545_{0..99}.npy` — units: MJy/sr → multiply by 1e6 * jysr2uk(545) to get µK_CMB
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_857_{0..99}.npy` — units: MJy/sr → multiply by 1e6 * jysr2uk(857) to get µK_CMB
+
+**CRITICAL: For Planck noise, the patch index MUST match the sky patch index (i_patch == i_planck_patch_dim). Load with `np.load(...)[ i_patch ]`.**
+
+---
+
+## Spectral Response and Utility Functions
+
+A `utils.py` module is available at `/home/node/data/compsep_data/utils.py`. **Always import using the absolute path:**
+
+```python
+import sys
+sys.path.insert(0, '/home/node/data/compsep_data')
+import utils
+```
+
+Key functions:
+- `utils.tsz(freq_ghz)` — tSZ spectral response in µK_CMB per Compton-y unit. Example values: tsz(90)≈-4.35e6, tsz(150)≈-2.60e6, tsz(217)≈-2.28e4, tsz(353)≈+3.05e6
+- `utils.ksz(freq_ghz)` — kSZ spectral response in µK_CMB (≈ -T_CMB_µK ≈ -2.726e6, frequency-independent)
+- `utils.jysr2uk(freq_ghz)` — converts Jy/sr to µK_CMB for CIB at given frequency
+- `utils.powers(a, b, ps=10, ell_n=199, window_alpha=None)` — flat-sky angular auto/cross power spectrum
+
+**IMPORTANT — `utils.powers` usage notes:**
+- Always pass `window_alpha=0.5` (Hann taper) when computing cross-power spectra or the cross-correlation coefficient r_ℓ. Without windowing, the raw flat-sky FFT produces r_ℓ ≈ 0 even for perfectly correlated maps due to edge effects and phase artifacts. This is a known numerical issue — do NOT interpret r_ℓ = 0 without windowing as a true absence of correlation.
+- Verify the estimator first: compute the power spectrum of Gaussian white noise and confirm it matches the theoretical expectation (σ² × pixel_area). If not, the pixel-to-physical mapping is wrong.
+
+---
+
+## Critical Signal Properties — Read Before Designing Any Analysis
+
+### Dynamic range warning (ESSENTIAL)
+The tSZ signal is orders of magnitude weaker than the other components:
+
+| Component | Typical variance |
+|-----------|-----------------|
+| Lensed CMB | ~1.25×10⁴ µK² |
+| CIB at 857 GHz | ~3.35×10¹⁰ (Jy/sr)² |
+| tSZ (Compton-y) | ~3.28×10⁻¹² |
+| kSZ | ~1.57×10⁻¹² |
+
+**The tSZ signal is 10¹⁵ times weaker in variance than the CIB at 857 GHz and 10⁷ times weaker than the CMB.**
+
+Consequences for machine learning:
+1. **Always standardize the tSZ target maps** (zero mean, unit variance) before training. Using raw Compton-y values as training targets will cause the network to treat the signal as numerical noise and collapse to predicting zero.
+2. **Never use a global L1/MSE loss on raw tSZ maps** — the background pixels (y ≈ 0) will dominate and the model will learn to predict a flat, near-zero map (model collapse). Use a weighted loss that upweights cluster pixels (y > 10⁻⁷) by a factor of 10³–10⁴, or use a focal/masked loss.
+3. **The tSZ signal is spatially extremely sparse** — massive galaxy clusters occupy <1% of pixels. Any loss function that treats all pixels equally will be dominated by empty-sky pixels.
+
+### Beam convolution (already applied to stacked maps)
+The `stacked_*` maps are already beam-convolved. The ground truth (`tsz.npy`, `lensed_cmb.npy`, etc.) has a 1 arcmin beam. The SR task is to recover 1-arcmin features from beam-smeared inputs:
+- At ℓ > 3000 (< 3.6 arcmin), the SO LAT signal is beam-suppressed and noise-dominated — deterministic pixel-phase recovery is information-theoretically impossible at these scales. Do NOT use a pixel-wise loss to penalize the model for failing to recover high-ℓ phases.
+- The cross-correlation coefficient r_ℓ → 0 at high ℓ is physically expected, not a pipeline bug. Report the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true) instead.
+
+### Spectral loss warning
+A logarithmic spectral consistency loss (penalizing |log C_ℓ^pred - log C_ℓ^true|) will cause catastrophic hallucination. The model will inject non-physical structures to satisfy global power constraints in noise-dominated patches, producing a hallucination fraction of >6000% on pure noise inputs. If a spectral loss is used, it must be:
+- Linear (not logarithmic)
+- Applied only to ℓ > 1000 (not low ℓ which is dominated by the CMB)
+- Applied only to high-SNR multipole bins
+
+---
+
+## Correct Loading Pattern
+
+```python
+import sys, os
+sys.path.insert(0, '/home/node/data/compsep_data')
+import utils
+import numpy as np
+
+os.environ['OMP_NUM_THREADS'] = '16'
+
+BASE = '/home/node/data/compsep_data/cut_maps'
+n_patch = 1523
+n_planck = 100
+n_so = 3000
+
+rng = np.random.default_rng(seed=42)
+i_so_indices = rng.integers(0, n_so, size=n_patch)       # random SO noise per patch
+i_planck_indices = rng.integers(0, n_planck, size=n_patch) # random Planck MC per patch
+
+# Load a single patch (index i_patch):
+i_patch = 0
+i_so = i_so_indices[i_patch]
+i_planck = i_planck_indices[i_patch]
+
+signal_90  = np.load(f'{BASE}/stacked_90.npy')[i_patch]   # µK_CMB
+signal_150 = np.load(f'{BASE}/stacked_150.npy')[i_patch]  # µK_CMB
+signal_217 = np.load(f'{BASE}/stacked_217.npy')[i_patch]  # µK_CMB
+signal_353 = np.load(f'{BASE}/stacked_353.npy')[i_patch]  # µK_CMB
+signal_545 = np.load(f'{BASE}/stacked_545.npy')[i_patch]  # µK_CMB
+signal_857 = np.load(f'{BASE}/stacked_857.npy')[i_patch]  # µK_CMB
+
+noise_90  = np.load(f'{BASE}/so_noise/90.npy')[i_so]      # µK_CMB
+noise_150 = np.load(f'{BASE}/so_noise/150.npy')[i_so]     # µK_CMB
+noise_217 = np.load(f'{BASE}/so_noise/217.npy')[i_so]     # µK_CMB
+
+pn_353_raw = np.load(f'{BASE}/planck_noise/planck_noise_353_{i_planck}.npy')[i_patch]
+pn_545_raw = np.load(f'{BASE}/planck_noise/planck_noise_545_{i_planck}.npy')[i_patch]
+pn_857_raw = np.load(f'{BASE}/planck_noise/planck_noise_857_{i_planck}.npy')[i_patch]
+noise_353 = pn_353_raw * 1e6                           # K_CMB → µK_CMB
+noise_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)     # MJy/sr → µK_CMB
+noise_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)     # MJy/sr → µK_CMB
+
+obs_90  = signal_90  + noise_90
+obs_150 = signal_150 + noise_150
+obs_217 = signal_217 + noise_217
+obs_353 = signal_353 + noise_353
+obs_545 = signal_545 + noise_545
+obs_857 = signal_857 + noise_857
+
+# Ground truth
+tsz_map = np.load(f'{BASE}/tsz.npy')[i_patch]        # Compton-y, dimensionless
+cib_353 = np.load(f'{BASE}/cib_353.npy')[i_patch]    # Jy/sr
+```
+
+**ALWAYS print explicit completion messages at the end of every script step**, e.g.:
+```python
+print(f'Step N completed successfully. Output shape: {array.shape}, saved to data/output.npy')
+```
+This is required for the pipeline controller to detect step completion.
+
+**Do NOT save PyTorch model weights (.pth files) to the experiment output directory** — they exceed GitHub's 100 MB file size limit and will block git pushes. Save model weights to `/tmp/` instead, e.g. `torch.save(model.state_dict(), '/tmp/best_model.pth')`.
+
+---
+
+## Patch Geometry
+
+- 1523 patches, 5°×5°, 256×256 pixels, ≈1.17 arcmin/pixel
+- Full-sky tessellation at 5° step spacing (no galactic cut)
+- Gnomonic (flat-sky) projection, bilinear interpolation from HEALPix nside=8192
+
+## Suggested Research Directions: Cluster Finding
+
+The scientific focus of this project is **galaxy cluster finding** using the tSZ effect. The ground truth cluster catalog can be constructed from peaks in `tsz.npy`, and the task is to detect and characterize clusters in realistic noisy multi-frequency observations.
+
+Possible directions (not exhaustive — Denario should feel free to propose novel approaches):
+
+1. **Detection completeness and purity** — measure cluster detection performance as a function of mass (using peak Compton-y as a mass proxy) in realistic SO+Planck noise. Characterize the survey selection function.
+
+2. **Multi-frequency Matched Filter (MMF)** — implement the standard MMF (optimal linear filter matched to the tSZ spectral signature and cluster profile) and measure detection S/N, completeness, and purity vs. cluster mass. This is the classical baseline used by ACT, SPT, and Planck.
+
+3. **Deep learning cluster finder** — train a detection network (e.g., peak-finding CNN, object detection, or segmentation model) directly on the noisy multi-frequency maps. Compare against the MMF baseline in terms of completeness, purity, and mass bias.
+
+4. **CIB contamination and bias** — quantify how CIB confusion at high frequencies biases cluster detection completeness, purity, and recovered integrated-Y. Can multi-frequency information be used to mitigate CIB-induced false detections?
+
+5. **Mass calibration** — given detected clusters, how accurately can the integrated Compton-Y (aperture-summed within some radius) be recovered as a function of cluster mass and noise level?
+
+## Hardware and Environment
+
+- Python: `/opt/denario-venv/bin/python`
+- 64 vCPUs (AMD Ryzen Threadripper PRO 9995WX), 128 GB RAM
+- NVIDIA RTX PRO 6000 Blackwell Edition, 96 GB VRAM, CUDA 13.0
+- PyTorch GPU: use `device='cuda'`
+- Multiprocessing: limit to ~8–16 workers; set `OMP_NUM_THREADS=16`
+- Load data patch-by-patch or in small batches; avoid loading all 1523 patches simultaneously
+
+
+
+
+Idea: 
+**Title**: Cross-Spectral Wiener Filtering for Optimal tSZ Extraction and Cluster Detection
+
+**Description**: This research objective implements a Multi-Frequency Wiener Filter (MWF) to reconstruct the tSZ Compton-y signal by incorporating the full multi-frequency signal and noise covariance structure, including the CIB cross-power spectra. Unlike hard-nulling constraints, the MWF statistically weights the 90–857 GHz channels to balance CIB suppression against SO/Planck noise amplification, utilizing the `utils.powers` estimator to generate the required cross-frequency power spectra ($\ell \leq 2000$). To handle the 10¹⁵ variance disparity, the signal covariance matrix is regularized by incorporating the CIB auto- and cross-spectra as distinct components, effectively treating the CIB as a correlated foreground rather than a deterministic template. Cluster profiles are modeled using a beam-convolved, frequency-specific profile derived from the FLAMINGO simulation to ensure spatial fidelity at the 1 arcmin target resolution. Detection performance is evaluated through a matched-filter peak-finding algorithm applied to the reconstructed y-map, with completeness and purity quantified against the ground-truth `tsz.npy` catalog as a function of halo mass and local CIB intensity. This approach avoids the instability of rigid projection by providing a statistically optimal estimator that minimizes the mean-square error in the presence of non-Gaussian foregrounds.
+
+Research plan:
+1. **Data Preprocessing and Normalization**:
+   - Implement a data loader that performs on-the-fly noise injection: randomly sample SO noise indices and match Planck noise indices to the patch index. Apply unit conversions (K_CMB to µK_CMB) and frequency-dependent scaling.
+   - Standardize the `tsz.npy` ground truth maps (zero mean, unit variance) and store the transformation parameters (mean/std) to allow for de-normalization of the final reconstructed y-map back to physical Compton-y units.
+   - Verify the dynamic range of the input maps to ensure the 10¹⁵ variance disparity is handled using `float64` precision throughout the pipeline.
+
+2. **Power Spectrum and Covariance Estimation**:
+   - Compute auto- and cross-power spectra for all 6 frequency channels and the tSZ ground truth using `utils.powers` with `window_alpha=0.5` for all terms.
+   - Perform this estimation on a representative subset of 500 patches to ensure statistical stability and computational efficiency.
+   - Construct the total observed signal covariance matrix $S_{\ell, \text{obs}}$ (including CMB, tSZ, kSZ, and CIB) and the tSZ-specific cross-correlation vector $S_{\ell, \text{tSZ-obs}}$.
+   - Validate the estimator by computing the power spectrum of Gaussian white noise to confirm it matches the theoretical expectation ($\sigma^2 \times \text{pixel\_area}$).
+
+3. **Multi-Frequency Wiener Filter (MWF) Construction**:
+   - Define the MWF operator $W_\ell = (S_{\ell, \text{obs}} + N_\ell)^{-1} S_{\ell, \text{tSZ-obs}}$, where $N_\ell$ includes the CIB auto- and cross-spectra as correlated foreground noise.
+   - Apply Tikhonov regularization (adding a small diagonal term) to the covariance matrix $(S_{\ell, \text{obs}} + N_\ell)$ before inversion to ensure numerical stability against the 10¹⁵ dynamic range disparity.
+   - Parallelize the construction of these matrices across available CPU cores.
+
+4. **Cluster Profile Modeling**:
+   - Derive a frequency-specific, beam-convolved cluster profile by stacking `tsz.npy` maps centered on high-mass halos.
+   - Ensure the profile accounts for the specific beam FWHM of each frequency channel (SO LAT vs. Planck HFI) to maintain spatial fidelity.
+
+5. **Reconstruction and Validation**:
+   - Apply the MWF operator in the harmonic domain to the multi-frequency observation vector to produce the reconstructed Compton-y map.
+   - Compute the empirical transfer function $T(\ell) = P_{\text{cross}}(\text{pred}, \text{true}) / P_{\text{auto}}(\text{true})$ and compare it against the theoretical expectation, masking noise-dominated regimes ($\ell > 3000$) to avoid artifacts.
+   - Evaluate reconstruction quality using a linear spectral loss for $\ell > 1000$ and compare performance against a standard Internal Linear Combination (ILC) baseline.
+
+6. **Cluster Detection Pipeline**:
+   - Perform peak-finding on the reconstructed y-map using a thresholding approach (e.g., SNR > 5).
+   - Use the beam-convolved cluster profile as a template to refine candidate detections and handle overlapping profiles.
+   - Account for the "look-elsewhere effect" when defining the detection threshold.
+
+7. **Performance Quantification**:
+   - Calculate detection completeness and purity by comparing the candidate catalog against the ground-truth catalog derived from `tsz.npy`.
+   - Evaluate performance as a function of halo mass (using peak Compton-y as a proxy) and local CIB intensity.
+   - Measure the mass bias in the recovered integrated-Y for detected clusters.
+
+8. **Final Reporting**:
+   - Compile the results into a summary of the MWF performance, including the transfer function, completeness/purity curves, and the impact of CIB contamination.
+   - Ensure all intermediate outputs are saved to the designated directory and completion messages are printed for each step.
+
+Analysis results:
+# Cross-Spectral Wiener Filtering for Optimal tSZ Extraction and Cluster Detection: Final Results and Interpretation
+
+## 1. Introduction and Methodological Overview
+
+The extraction of the thermal Sunyaev-Zel'dovich (tSZ) effect from multi-frequency cosmic microwave background (CMB) observations is a fundamental challenge in modern observational cosmology. The tSZ signal, which traces the integrated line-of-sight thermal pressure of ionized gas in galaxy clusters, is spatially sparse and extremely weak compared to primary CMB anisotropies, instrumental noise, and foregrounds such as the Cosmic Infrared Background (CIB). 
+
+In this study, we implemented and evaluated a Multi-Frequency Wiener Filter (MWF) to reconstruct the tSZ Compton-$y$ map from simulated Simons Observatory (SO) LAT (90, 150, 217 GHz) and Planck HFI (353, 545, 857 GHz) observations. Unlike standard Internal Linear Combination (ILC) methods that rely on variance-weighted hard-nulling or simple spectral matching, the MWF leverages the full empirical auto- and cross-power spectra of the observed signals. By treating the CIB and instrumental noise as a unified, correlated noise covariance matrix $N_\ell$, the MWF provides a statistically optimal estimator that minimizes the mean-square error of the reconstructed $y$-map. 
+
+This report details the quantitative performance of the MWF pipeline, compares it against an ILC baseline, and provides a physical interpretation of the results, with a specific focus on cluster detection completeness, purity, and the mitigating effects of the MWF on CIB contamination.
+
+---
+
+## 2. Signal Properties and the Dynamic Range Challenge
+
+A critical preliminary step in our analysis was quantifying the variance disparity across the constituent components. The FLAMINGO L1_m9 HYDRO_FIDUCIAL simulations reveal an extreme dynamic range that dictates the numerical approach to covariance inversion.
+
+### Table 1: Component and Stacked Signal Variances
+| Component / Channel | Variance | Units |
+| :--- | :--- | :--- |
+| **Ground Truth Components** | | |
+| Lensed CMB | $1.26 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| CIB at 857 GHz | $3.36 \times 10^{10}$ | $(\text{Jy/sr})^2$ |
+| tSZ Compton-$y$ | $3.28 \times 10^{-12}$ | Dimensionless |
+| kSZ Doppler-$b$ | $1.57 \times 10^{-12}$ | Dimensionless |
+| **Stacked Observations** | | |
+| 90 GHz (SO LAT) | $1.25 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 150 GHz (SO LAT) | $1.26 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 217 GHz (SO LAT) | $1.28 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 353 GHz (Planck) | $1.46 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 545 GHz (Planck) | $5.18 \times 10^5$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 857 GHz (Planck) | $3.84 \times 10^9$ | $\mu\text{K}_{\text{CMB}}^2$ |
+
+As shown in Table 1, the tSZ signal variance is approximately $10^{15}$ times weaker than the CIB at 857 GHz (when converted to comparable temperature units) and $10^7$ times weaker than the primary CMB. 
+
+**Physical Interpretation:** The 857 GHz and 545 GHz channels are overwhelmingly dominated by the CIB, which traces dusty star-forming galaxies. While these channels are crucial for anchoring the dust spectral energy distribution (SED) and removing it from the lower-frequency channels, their massive variance poses a severe numerical risk. During the construction of the MWF, the inversion of the $(S_{\ell, \text{obs}} + N_\ell)$ covariance matrix is highly susceptible to singularity or floating-point truncation errors. To counteract this, we successfully applied Tikhonov regularization ($\epsilon = 10^{-5}$ on the diagonal) and standardized the tSZ target maps ($\mu = 1.50 \times 10^{-6}$, $\sigma = 1.81 \times 10^{-6}$). This ensured stable filter weights across all multipoles.
+
+---
+
+## 3. Harmonic Domain Reconstruction: MWF vs. ILC
+
+The reconstruction quality was first evaluated in the harmonic domain using the empirical transfer function $T(\ell) = P_{\text{cross}}(\text{pred}, \text{true}) / P_{\text{auto}}(\text{true})$ and the cross-correlation coefficient $r_\ell$.
+
+### Transfer Function and Cross-Correlation
+The MWF demonstrates a clear theoretical and practical advantage over the ILC baseline:
+1. **Low to Intermediate Multipoles ($\ell < 2000$):** Both MWF and ILC successfully recover the tSZ signal, with $r_\ell$ approaching unity. However, the MWF exhibits a more stable transfer function. The ILC, which relies on a uniform-weight linear combination based on inverse pixel variance, struggles to optimally suppress the spatially correlated CIB, leading to excess power (and thus $T(\ell) > 1$ artifacts) in intermediate $\ell$ bins.
+2. **High Multipoles ($\ell > 3000$):** In this regime, the physical signal is heavily suppressed by the instrumental beams. Furthermore, the SO LAT noise power spectrum dominates the tSZ power. The MWF naturally rolls off, driving $T(\ell) \to 0$ and $r_\ell \to 0$. This is the mathematically correct behavior for a Wiener filter: when the Signal-to-Noise Ratio (SNR) drops below unity, the optimal mean-square-error estimator suppresses the prediction to avoid hallucinating noise as signal. Conversely, the ILC baseline forces a spectral combination regardless of the local SNR, resulting in severe noise amplification at high $\ell$.
+
+**Limitations of the Wiener Filter:** While the MWF minimizes global variance, its aggressive suppression at high $\ell$ means that the sharpest features of cluster cores (scales $< 1$ arcmin) are smoothed out. Consequently, the reconstructed $y$-map is a low-pass filtered version of the truth. This necessitates the use of beam-convolved, frequency-specific cluster profiles during the matched-filter detection phase to ensure the spatial templates match the filtered reality.
+
+---
+
+## 4. Cluster Detection Pipeline: Completeness and Purity
+
+To quantify the scientific utility of the reconstructions, we applied a spatial matched filter to both the MWF and ILC $y$-maps, utilizing the radially averaged, beam-convolved cluster profiles. Candidate clusters were extracted using local peak-finding at SNR > 4 and SNR > 5 thresholds.
+
+### Table 2: Cluster Detection Yields
+| Catalog | SNR > 4 Candidates | SNR > 5 Candidates |
+| :--- | :--- | :--- |
+| **Ground Truth ($y > 10^{-6}$)** | N/A | 742,734 |
+| **MWF Reconstruction** | 6,745 | 1,488 |
+| **ILC Baseline** | 8,246 | 1,692 |
+
+*Note: The ground truth catalog contains all halos down to $y = 10^{-6}$, but only a fraction of these are massive enough to be detectable above the noise floor.*
+
+### Interpretation of Detection Yields
+At both SNR thresholds, the ILC baseline produces significantly more candidate detections than the MWF. Cross-matching these candidates with the ground-truth catalog reveals that the excess ILC candidates are predominantly **false positives**.
+
+1. **Purity:** The MWF achieves substantially higher purity across the recovered Compton-$y$ mass range. Because the ILC does not account for the off-diagonal cross-frequency covariance of the CIB, positive CIB fluctuations at high frequencies leak into the ILC $y$-map, creating artificial peaks that the matched filter misidentifies as clusters. The MWF, by explicitly modeling the CIB cross-spectra in $N_\ell$, optimally de-weights these modes, drastically reducing the false discovery rate.
+2. **Completeness:** For high-mass clusters (true peak $y > 5 \times 10^{-5}$), both methods achieve near 100% completeness. However, in the intermediate mass regime, the MWF provides a superior completeness-to-purity trade-off.
+
+---
+
+## 5. The Impact of CIB Contamination
+
+One of the most significant findings of this study is the differential impact of the Cosmic Infrared Background on cluster detection.
+
+- **ILC Degradation:** The purity of the ILC catalog drops precipitously in regions of high CIB intensity. The ILC algorithm interprets the rising CIB SED as a combination of CMB and noise, failing to null it effectively because the tSZ spectral response (which is positive at 353 GHz) is partially degenerate with the CIB spectrum.
+- **MWF Robustness:** The MWF maintains a remarkably flat purity curve even in regions with high local CIB intensity. By utilizing the cross-power spectra between the 353, 545, and 857 GHz channels, the MWF recognizes the spatial signature of the CIB and statistically separates it from the tSZ effect.
+
+**Physical Takeaway:** Multi-frequency information *can* be used to mitigate CIB-induced false detections, but only if the spatial covariance (power spectra) of the foregrounds is explicitly modeled. Hard-nulling or variance-weighting (ILC) is insufficient for non-Gaussian, highly correlated foregrounds like the CIB.
+
+---
+
+## 6. Mass Calibration and Bias
+
+Finally, we evaluated the accuracy of the recovered integrated Compton-$Y$ (aperture-summed within a 3-pixel radius) as a proxy for cluster mass.
+
+1. **Scatter in Recovered $Y$:** The scatter plot of Recovered vs. True Integrated $Y$ demonstrates that the MWF yields a tighter relation with lower variance than the ILC. The ILC exhibits significant upward scatter at low masses, a classic manifestation of Eddington bias exacerbated by unresolved CIB point sources blending with the tSZ decrement/increment.
+2. **Mass Bias:** The fractional mass bias, defined as $(\text{Recovered } Y - \text{True } Y) / \text{True } Y$, reveals a fundamental trade-off.
+   - The **ILC** shows a net positive bias at low masses due to the aforementioned CIB leakage and noise rectification by the peak-finding algorithm.
+   - The **MWF** exhibits a slight *negative* bias (suppression) across the mass range. This is a known property of Wiener filters: because the filter minimizes the mean-square error by multiplying the observation by $S/(S+N)$, the recovered signal is always biased toward zero by a factor of $(1 + N/S)^{-1}$. While this suppression guarantees higher purity and lower overall MSE, it requires that the final cluster catalog be calibrated using a mass-observable scaling relation derived from simulations to correct for the Wiener filter bias.
+
+---
+
+## 7. Conclusion
+
+This research successfully implemented a Multi-Frequency Wiener Filter to extract the tSZ signal from simulated SO LAT and Planck HFI observations. By rigorously handling the $10^{15}$ variance disparity between the CIB and the tSZ signal through Tikhonov regularization, and by explicitly modeling the cross-frequency covariance of the foregrounds, the MWF significantly outperforms a standard ILC baseline.
+
+**Key Findings:**
+- The MWF provides a stable harmonic transfer function that optimally suppresses noise at $\ell > 3000$, avoiding the catastrophic noise amplification seen in ILC approaches.
+- In the spatial domain, the MWF yields a highly pure cluster catalog (1,488 candidates at SNR > 5), effectively eliminating the thousands of CIB-induced false positives that plague the ILC baseline.
+- The MWF is highly robust to local CIB contamination, maintaining high purity even in regions of intense 857 GHz emission.
+- While the MWF introduces a predictable, scale-dependent negative mass bias due to its $S/(S+N)$ formulation, the resulting integrated-$Y$ scatter is significantly tighter, allowing for more precise cosmological mass calibration once the bias is forward-modeled.
+
+These results underscore the necessity of incorporating spatial covariance priors when separating weak, non-Gaussian signals from complex astrophysical foregrounds.
+
+**Respond in exactly this format:**
+
+\\begin{COMMENTS}
+<COMMENTS>
+\\end{COMMENTS}
+
+In <COMMENTS>, put your comments. Your comments should be short, unless you identify issues with the input data description.
+
+###### PROMPT ENDS ########
+
+
+###### PROMPT BEGINS ########
+Human: You are given four inputs:
+1) a dataset description,
+2) an idea or hypothesis,
+3) a research plan, and
+4) the results of the analysis.
+
+Your task is to produce a concise but information-dense summary that captures all scientifically relevant details needed to continue or extend this project. 
+
+This summary will be included in a living research report that will be updated as new experiments are performed. 
+Future agents will receive this report along with:
+
+- the same dataset description,
+- the same or a revised idea,
+- a new research plan,
+- and new experimental results.
+
+Therefore, your summary should:
+- Preserve all key assumptions, definitions, data characteristics, and methodological choices
+- Clearly state the main findings, limitations, and uncertainties
+- Highlight decisions that constrain or inform future experiments
+- Avoid unnecessary narrative, background, or stylistic elaboration
+
+**Aim for maximal information retention per word.**
+Write clearly and precisely, prioritizing content that a future agent would need in order to:
+
+- understand what was done,
+- know what worked or failed,
+- and decide what to do next.
+
+Data description:
+
+# Dataset Description: FLAMINGO Lensed Component-Separation Maps
+
+This dataset consists of flat-sky cut maps derived from full-sky maps of the cosmic microwave background (CMB), thermal and kinetic Sunyaev-Zel'dovich effects (tSZ/kSZ), and the cosmic infrared background (CIB). The sky signal maps originate from the FLAMINGO L1_m9 HYDRO_FIDUCIAL simulation (lightcone0, Jeger rotation) — a large-volume (1 Gpc comoving box) hydrodynamical simulation with self-consistent baryonic physics (radiative cooling, star formation, AGN feedback, diffuse gas flows).
+
+The CMB is a Gaussian realization lensed by the FLAMINGO convergence map (κ) via lenspyx, using Planck-like cosmology (h=0.6736, n_s=0.965, A_s=2.1e-9, seed=42).
+
+---
+
+## File Inventory (absolute paths, verified)
+
+All files are under `/home/node/data/compsep_data/cut_maps/`.
+
+### Individual component maps — ground truth, 1 arcmin beam
+Shape: **(1523, 256, 256)**, dtype **float64**
+
+- `/home/node/data/compsep_data/cut_maps/lensed_cmb.npy` — Lensed CMB temperature, µK_CMB
+- `/home/node/data/compsep_data/cut_maps/tsz.npy` — tSZ Compton-y parameter, dimensionless
+- `/home/node/data/compsep_data/cut_maps/ksz.npy` — kSZ Doppler-b parameter, dimensionless
+- `/home/node/data/compsep_data/cut_maps/cib_353.npy` — CIB at 353 GHz, Jy/sr
+- `/home/node/data/compsep_data/cut_maps/cib_545.npy` — CIB at 545 GHz, Jy/sr
+- `/home/node/data/compsep_data/cut_maps/cib_857.npy` — CIB at 857 GHz, Jy/sr
+
+### Stacked (observed) signal maps — frequency-specific beam, no noise
+Shape: **(1523, 256, 256)**, dtype **float64**, units **µK_CMB**
+
+- `/home/node/data/compsep_data/cut_maps/stacked_90.npy` — 90 GHz total signal, beam FWHM 2.2 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_150.npy` — 150 GHz total signal, beam FWHM 1.4 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_217.npy` — 217 GHz total signal, beam FWHM 1.0 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_353.npy` — 353 GHz total signal, beam FWHM 4.5 arcmin (Planck HFI)
+- `/home/node/data/compsep_data/cut_maps/stacked_545.npy` — 545 GHz total signal, beam FWHM 4.72 arcmin (Planck HFI)
+- `/home/node/data/compsep_data/cut_maps/stacked_857.npy` — 857 GHz total signal, beam FWHM 4.42 arcmin (Planck HFI)
+
+The stacked signal at each frequency is: signal(freq) = CIB(freq)*jysr2uk(freq) + tSZ*f_tSZ(freq) + kSZ*f_kSZ + lensed_CMB, then smoothed with the frequency-specific beam. Individual component maps have a 1 arcmin beam.
+
+### Noise maps
+
+**Simons Observatory (SO) LAT noise** — 3000 independent Gaussian realizations
+Shape: **(3000, 256, 256)**, dtype **float64**, units **µK_CMB**
+
+- `/home/node/data/compsep_data/cut_maps/so_noise/90.npy`
+- `/home/node/data/compsep_data/cut_maps/so_noise/150.npy`
+- `/home/node/data/compsep_data/cut_maps/so_noise/217.npy`
+
+SO noise is drawn from the SO LAT v3.1 temperature noise power spectrum (mode 2, elevation 50°, f_sky=0.4). 90 and 150 GHz are correlated (Cholesky decomposition); 217 GHz is independent. **The SO noise index does NOT need to match the sky patch index — sample it randomly.**
+
+**Planck FFP10 noise** — 100 MC realizations per high-frequency channel
+Shape per file: **(1523, 256, 256)**, dtype **float64**
+Filename pattern: `planck_noise_{freq}_{i}.npy`, freq ∈ {353, 545, 857}, i ∈ {0, …, 99}
+
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_353_{0..99}.npy` — units: K_CMB → multiply by 1e6 to get µK_CMB
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_545_{0..99}.npy` — units: MJy/sr → multiply by 1e6 * jysr2uk(545) to get µK_CMB
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_857_{0..99}.npy` — units: MJy/sr → multiply by 1e6 * jysr2uk(857) to get µK_CMB
+
+**CRITICAL: For Planck noise, the patch index MUST match the sky patch index (i_patch == i_planck_patch_dim). Load with `np.load(...)[ i_patch ]`.**
+
+---
+
+## Spectral Response and Utility Functions
+
+A `utils.py` module is available at `/home/node/data/compsep_data/utils.py`. **Always import using the absolute path:**
+
+```python
+import sys
+sys.path.insert(0, '/home/node/data/compsep_data')
+import utils
+```
+
+Key functions:
+- `utils.tsz(freq_ghz)` — tSZ spectral response in µK_CMB per Compton-y unit. Example values: tsz(90)≈-4.35e6, tsz(150)≈-2.60e6, tsz(217)≈-2.28e4, tsz(353)≈+3.05e6
+- `utils.ksz(freq_ghz)` — kSZ spectral response in µK_CMB (≈ -T_CMB_µK ≈ -2.726e6, frequency-independent)
+- `utils.jysr2uk(freq_ghz)` — converts Jy/sr to µK_CMB for CIB at given frequency
+- `utils.powers(a, b, ps=10, ell_n=199, window_alpha=None)` — flat-sky angular auto/cross power spectrum
+
+**IMPORTANT — `utils.powers` usage notes:**
+- Always pass `window_alpha=0.5` (Hann taper) when computing cross-power spectra or the cross-correlation coefficient r_ℓ. Without windowing, the raw flat-sky FFT produces r_ℓ ≈ 0 even for perfectly correlated maps due to edge effects and phase artifacts. This is a known numerical issue — do NOT interpret r_ℓ = 0 without windowing as a true absence of correlation.
+- Verify the estimator first: compute the power spectrum of Gaussian white noise and confirm it matches the theoretical expectation (σ² × pixel_area). If not, the pixel-to-physical mapping is wrong.
+
+---
+
+## Critical Signal Properties — Read Before Designing Any Analysis
+
+### Dynamic range warning (ESSENTIAL)
+The tSZ signal is orders of magnitude weaker than the other components:
+
+| Component | Typical variance |
+|-----------|-----------------|
+| Lensed CMB | ~1.25×10⁴ µK² |
+| CIB at 857 GHz | ~3.35×10¹⁰ (Jy/sr)² |
+| tSZ (Compton-y) | ~3.28×10⁻¹² |
+| kSZ | ~1.57×10⁻¹² |
+
+**The tSZ signal is 10¹⁵ times weaker in variance than the CIB at 857 GHz and 10⁷ times weaker than the CMB.**
+
+Consequences for machine learning:
+1. **Always standardize the tSZ target maps** (zero mean, unit variance) before training. Using raw Compton-y values as training targets will cause the network to treat the signal as numerical noise and collapse to predicting zero.
+2. **Never use a global L1/MSE loss on raw tSZ maps** — the background pixels (y ≈ 0) will dominate and the model will learn to predict a flat, near-zero map (model collapse). Use a weighted loss that upweights cluster pixels (y > 10⁻⁷) by a factor of 10³–10⁴, or use a focal/masked loss.
+3. **The tSZ signal is spatially extremely sparse** — massive galaxy clusters occupy <1% of pixels. Any loss function that treats all pixels equally will be dominated by empty-sky pixels.
+
+### Beam convolution (already applied to stacked maps)
+The `stacked_*` maps are already beam-convolved. The ground truth (`tsz.npy`, `lensed_cmb.npy`, etc.) has a 1 arcmin beam. The SR task is to recover 1-arcmin features from beam-smeared inputs:
+- At ℓ > 3000 (< 3.6 arcmin), the SO LAT signal is beam-suppressed and noise-dominated — deterministic pixel-phase recovery is information-theoretically impossible at these scales. Do NOT use a pixel-wise loss to penalize the model for failing to recover high-ℓ phases.
+- The cross-correlation coefficient r_ℓ → 0 at high ℓ is physically expected, not a pipeline bug. Report the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true) instead.
+
+### Spectral loss warning
+A logarithmic spectral consistency loss (penalizing |log C_ℓ^pred - log C_ℓ^true|) will cause catastrophic hallucination. The model will inject non-physical structures to satisfy global power constraints in noise-dominated patches, producing a hallucination fraction of >6000% on pure noise inputs. If a spectral loss is used, it must be:
+- Linear (not logarithmic)
+- Applied only to ℓ > 1000 (not low ℓ which is dominated by the CMB)
+- Applied only to high-SNR multipole bins
+
+---
+
+## Correct Loading Pattern
+
+```python
+import sys, os
+sys.path.insert(0, '/home/node/data/compsep_data')
+import utils
+import numpy as np
+
+os.environ['OMP_NUM_THREADS'] = '16'
+
+BASE = '/home/node/data/compsep_data/cut_maps'
+n_patch = 1523
+n_planck = 100
+n_so = 3000
+
+rng = np.random.default_rng(seed=42)
+i_so_indices = rng.integers(0, n_so, size=n_patch)       # random SO noise per patch
+i_planck_indices = rng.integers(0, n_planck, size=n_patch) # random Planck MC per patch
+
+# Load a single patch (index i_patch):
+i_patch = 0
+i_so = i_so_indices[i_patch]
+i_planck = i_planck_indices[i_patch]
+
+signal_90  = np.load(f'{BASE}/stacked_90.npy')[i_patch]   # µK_CMB
+signal_150 = np.load(f'{BASE}/stacked_150.npy')[i_patch]  # µK_CMB
+signal_217 = np.load(f'{BASE}/stacked_217.npy')[i_patch]  # µK_CMB
+signal_353 = np.load(f'{BASE}/stacked_353.npy')[i_patch]  # µK_CMB
+signal_545 = np.load(f'{BASE}/stacked_545.npy')[i_patch]  # µK_CMB
+signal_857 = np.load(f'{BASE}/stacked_857.npy')[i_patch]  # µK_CMB
+
+noise_90  = np.load(f'{BASE}/so_noise/90.npy')[i_so]      # µK_CMB
+noise_150 = np.load(f'{BASE}/so_noise/150.npy')[i_so]     # µK_CMB
+noise_217 = np.load(f'{BASE}/so_noise/217.npy')[i_so]     # µK_CMB
+
+pn_353_raw = np.load(f'{BASE}/planck_noise/planck_noise_353_{i_planck}.npy')[i_patch]
+pn_545_raw = np.load(f'{BASE}/planck_noise/planck_noise_545_{i_planck}.npy')[i_patch]
+pn_857_raw = np.load(f'{BASE}/planck_noise/planck_noise_857_{i_planck}.npy')[i_patch]
+noise_353 = pn_353_raw * 1e6                           # K_CMB → µK_CMB
+noise_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)     # MJy/sr → µK_CMB
+noise_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)     # MJy/sr → µK_CMB
+
+obs_90  = signal_90  + noise_90
+obs_150 = signal_150 + noise_150
+obs_217 = signal_217 + noise_217
+obs_353 = signal_353 + noise_353
+obs_545 = signal_545 + noise_545
+obs_857 = signal_857 + noise_857
+
+# Ground truth
+tsz_map = np.load(f'{BASE}/tsz.npy')[i_patch]        # Compton-y, dimensionless
+cib_353 = np.load(f'{BASE}/cib_353.npy')[i_patch]    # Jy/sr
+```
+
+**ALWAYS print explicit completion messages at the end of every script step**, e.g.:
+```python
+print(f'Step N completed successfully. Output shape: {array.shape}, saved to data/output.npy')
+```
+This is required for the pipeline controller to detect step completion.
+
+**Do NOT save PyTorch model weights (.pth files) to the experiment output directory** — they exceed GitHub's 100 MB file size limit and will block git pushes. Save model weights to `/tmp/` instead, e.g. `torch.save(model.state_dict(), '/tmp/best_model.pth')`.
+
+---
+
+## Patch Geometry
+
+- 1523 patches, 5°×5°, 256×256 pixels, ≈1.17 arcmin/pixel
+- Full-sky tessellation at 5° step spacing (no galactic cut)
+- Gnomonic (flat-sky) projection, bilinear interpolation from HEALPix nside=8192
+
+## Suggested Research Directions: Cluster Finding
+
+The scientific focus of this project is **galaxy cluster finding** using the tSZ effect. The ground truth cluster catalog can be constructed from peaks in `tsz.npy`, and the task is to detect and characterize clusters in realistic noisy multi-frequency observations.
+
+Possible directions (not exhaustive — Denario should feel free to propose novel approaches):
+
+1. **Detection completeness and purity** — measure cluster detection performance as a function of mass (using peak Compton-y as a mass proxy) in realistic SO+Planck noise. Characterize the survey selection function.
+
+2. **Multi-frequency Matched Filter (MMF)** — implement the standard MMF (optimal linear filter matched to the tSZ spectral signature and cluster profile) and measure detection S/N, completeness, and purity vs. cluster mass. This is the classical baseline used by ACT, SPT, and Planck.
+
+3. **Deep learning cluster finder** — train a detection network (e.g., peak-finding CNN, object detection, or segmentation model) directly on the noisy multi-frequency maps. Compare against the MMF baseline in terms of completeness, purity, and mass bias.
+
+4. **CIB contamination and bias** — quantify how CIB confusion at high frequencies biases cluster detection completeness, purity, and recovered integrated-Y. Can multi-frequency information be used to mitigate CIB-induced false detections?
+
+5. **Mass calibration** — given detected clusters, how accurately can the integrated Compton-Y (aperture-summed within some radius) be recovered as a function of cluster mass and noise level?
+
+## Hardware and Environment
+
+- Python: `/opt/denario-venv/bin/python`
+- 64 vCPUs (AMD Ryzen Threadripper PRO 9995WX), 128 GB RAM
+- NVIDIA RTX PRO 6000 Blackwell Edition, 96 GB VRAM, CUDA 13.0
+- PyTorch GPU: use `device='cuda'`
+- Multiprocessing: limit to ~8–16 workers; set `OMP_NUM_THREADS=16`
+- Load data patch-by-patch or in small batches; avoid loading all 1523 patches simultaneously
+
+
+
+
+Idea: 
+**Title**: Cross-Spectral Wiener Filtering for Optimal tSZ Extraction and Cluster Detection
+
+**Description**: This research objective implements a Multi-Frequency Wiener Filter (MWF) to reconstruct the tSZ Compton-y signal by incorporating the full multi-frequency signal and noise covariance structure, including the CIB cross-power spectra. Unlike hard-nulling constraints, the MWF statistically weights the 90–857 GHz channels to balance CIB suppression against SO/Planck noise amplification, utilizing the `utils.powers` estimator to generate the required cross-frequency power spectra ($\ell \leq 2000$). To handle the 10¹⁵ variance disparity, the signal covariance matrix is regularized by incorporating the CIB auto- and cross-spectra as distinct components, effectively treating the CIB as a correlated foreground rather than a deterministic template. Cluster profiles are modeled using a beam-convolved, frequency-specific profile derived from the FLAMINGO simulation to ensure spatial fidelity at the 1 arcmin target resolution. Detection performance is evaluated through a matched-filter peak-finding algorithm applied to the reconstructed y-map, with completeness and purity quantified against the ground-truth `tsz.npy` catalog as a function of halo mass and local CIB intensity. This approach avoids the instability of rigid projection by providing a statistically optimal estimator that minimizes the mean-square error in the presence of non-Gaussian foregrounds.
+
+Research plan:
+1. **Data Preprocessing and Normalization**:
+   - Implement a data loader that performs on-the-fly noise injection: randomly sample SO noise indices and match Planck noise indices to the patch index. Apply unit conversions (K_CMB to µK_CMB) and frequency-dependent scaling.
+   - Standardize the `tsz.npy` ground truth maps (zero mean, unit variance) and store the transformation parameters (mean/std) to allow for de-normalization of the final reconstructed y-map back to physical Compton-y units.
+   - Verify the dynamic range of the input maps to ensure the 10¹⁵ variance disparity is handled using `float64` precision throughout the pipeline.
+
+2. **Power Spectrum and Covariance Estimation**:
+   - Compute auto- and cross-power spectra for all 6 frequency channels and the tSZ ground truth using `utils.powers` with `window_alpha=0.5` for all terms.
+   - Perform this estimation on a representative subset of 500 patches to ensure statistical stability and computational efficiency.
+   - Construct the total observed signal covariance matrix $S_{\ell, \text{obs}}$ (including CMB, tSZ, kSZ, and CIB) and the tSZ-specific cross-correlation vector $S_{\ell, \text{tSZ-obs}}$.
+   - Validate the estimator by computing the power spectrum of Gaussian white noise to confirm it matches the theoretical expectation ($\sigma^2 \times \text{pixel\_area}$).
+
+3. **Multi-Frequency Wiener Filter (MWF) Construction**:
+   - Define the MWF operator $W_\ell = (S_{\ell, \text{obs}} + N_\ell)^{-1} S_{\ell, \text{tSZ-obs}}$, where $N_\ell$ includes the CIB auto- and cross-spectra as correlated foreground noise.
+   - Apply Tikhonov regularization (adding a small diagonal term) to the covariance matrix $(S_{\ell, \text{obs}} + N_\ell)$ before inversion to ensure numerical stability against the 10¹⁵ dynamic range disparity.
+   - Parallelize the construction of these matrices across available CPU cores.
+
+4. **Cluster Profile Modeling**:
+   - Derive a frequency-specific, beam-convolved cluster profile by stacking `tsz.npy` maps centered on high-mass halos.
+   - Ensure the profile accounts for the specific beam FWHM of each frequency channel (SO LAT vs. Planck HFI) to maintain spatial fidelity.
+
+5. **Reconstruction and Validation**:
+   - Apply the MWF operator in the harmonic domain to the multi-frequency observation vector to produce the reconstructed Compton-y map.
+   - Compute the empirical transfer function $T(\ell) = P_{\text{cross}}(\text{pred}, \text{true}) / P_{\text{auto}}(\text{true})$ and compare it against the theoretical expectation, masking noise-dominated regimes ($\ell > 3000$) to avoid artifacts.
+   - Evaluate reconstruction quality using a linear spectral loss for $\ell > 1000$ and compare performance against a standard Internal Linear Combination (ILC) baseline.
+
+6. **Cluster Detection Pipeline**:
+   - Perform peak-finding on the reconstructed y-map using a thresholding approach (e.g., SNR > 5).
+   - Use the beam-convolved cluster profile as a template to refine candidate detections and handle overlapping profiles.
+   - Account for the "look-elsewhere effect" when defining the detection threshold.
+
+7. **Performance Quantification**:
+   - Calculate detection completeness and purity by comparing the candidate catalog against the ground-truth catalog derived from `tsz.npy`.
+   - Evaluate performance as a function of halo mass (using peak Compton-y as a proxy) and local CIB intensity.
+   - Measure the mass bias in the recovered integrated-Y for detected clusters.
+
+8. **Final Reporting**:
+   - Compile the results into a summary of the MWF performance, including the transfer function, completeness/purity curves, and the impact of CIB contamination.
+   - Ensure all intermediate outputs are saved to the designated directory and completion messages are printed for each step.
+
+Analysis results:
+# Cross-Spectral Wiener Filtering for Optimal tSZ Extraction and Cluster Detection: Final Results and Interpretation
+
+## 1. Introduction and Methodological Overview
+
+The extraction of the thermal Sunyaev-Zel'dovich (tSZ) effect from multi-frequency cosmic microwave background (CMB) observations is a fundamental challenge in modern observational cosmology. The tSZ signal, which traces the integrated line-of-sight thermal pressure of ionized gas in galaxy clusters, is spatially sparse and extremely weak compared to primary CMB anisotropies, instrumental noise, and foregrounds such as the Cosmic Infrared Background (CIB). 
+
+In this study, we implemented and evaluated a Multi-Frequency Wiener Filter (MWF) to reconstruct the tSZ Compton-$y$ map from simulated Simons Observatory (SO) LAT (90, 150, 217 GHz) and Planck HFI (353, 545, 857 GHz) observations. Unlike standard Internal Linear Combination (ILC) methods that rely on variance-weighted hard-nulling or simple spectral matching, the MWF leverages the full empirical auto- and cross-power spectra of the observed signals. By treating the CIB and instrumental noise as a unified, correlated noise covariance matrix $N_\ell$, the MWF provides a statistically optimal estimator that minimizes the mean-square error of the reconstructed $y$-map. 
+
+This report details the quantitative performance of the MWF pipeline, compares it against an ILC baseline, and provides a physical interpretation of the results, with a specific focus on cluster detection completeness, purity, and the mitigating effects of the MWF on CIB contamination.
+
+---
+
+## 2. Signal Properties and the Dynamic Range Challenge
+
+A critical preliminary step in our analysis was quantifying the variance disparity across the constituent components. The FLAMINGO L1_m9 HYDRO_FIDUCIAL simulations reveal an extreme dynamic range that dictates the numerical approach to covariance inversion.
+
+### Table 1: Component and Stacked Signal Variances
+| Component / Channel | Variance | Units |
+| :--- | :--- | :--- |
+| **Ground Truth Components** | | |
+| Lensed CMB | $1.26 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| CIB at 857 GHz | $3.36 \times 10^{10}$ | $(\text{Jy/sr})^2$ |
+| tSZ Compton-$y$ | $3.28 \times 10^{-12}$ | Dimensionless |
+| kSZ Doppler-$b$ | $1.57 \times 10^{-12}$ | Dimensionless |
+| **Stacked Observations** | | |
+| 90 GHz (SO LAT) | $1.25 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 150 GHz (SO LAT) | $1.26 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 217 GHz (SO LAT) | $1.28 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 353 GHz (Planck) | $1.46 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 545 GHz (Planck) | $5.18 \times 10^5$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 857 GHz (Planck) | $3.84 \times 10^9$ | $\mu\text{K}_{\text{CMB}}^2$ |
+
+As shown in Table 1, the tSZ signal variance is approximately $10^{15}$ times weaker than the CIB at 857 GHz (when converted to comparable temperature units) and $10^7$ times weaker than the primary CMB. 
+
+**Physical Interpretation:** The 857 GHz and 545 GHz channels are overwhelmingly dominated by the CIB, which traces dusty star-forming galaxies. While these channels are crucial for anchoring the dust spectral energy distribution (SED) and removing it from the lower-frequency channels, their massive variance poses a severe numerical risk. During the construction of the MWF, the inversion of the $(S_{\ell, \text{obs}} + N_\ell)$ covariance matrix is highly susceptible to singularity or floating-point truncation errors. To counteract this, we successfully applied Tikhonov regularization ($\epsilon = 10^{-5}$ on the diagonal) and standardized the tSZ target maps ($\mu = 1.50 \times 10^{-6}$, $\sigma = 1.81 \times 10^{-6}$). This ensured stable filter weights across all multipoles.
+
+---
+
+## 3. Harmonic Domain Reconstruction: MWF vs. ILC
+
+The reconstruction quality was first evaluated in the harmonic domain using the empirical transfer function $T(\ell) = P_{\text{cross}}(\text{pred}, \text{true}) / P_{\text{auto}}(\text{true})$ and the cross-correlation coefficient $r_\ell$.
+
+### Transfer Function and Cross-Correlation
+The MWF demonstrates a clear theoretical and practical advantage over the ILC baseline:
+1. **Low to Intermediate Multipoles ($\ell < 2000$):** Both MWF and ILC successfully recover the tSZ signal, with $r_\ell$ approaching unity. However, the MWF exhibits a more stable transfer function. The ILC, which relies on a uniform-weight linear combination based on inverse pixel variance, struggles to optimally suppress the spatially correlated CIB, leading to excess power (and thus $T(\ell) > 1$ artifacts) in intermediate $\ell$ bins.
+2. **High Multipoles ($\ell > 3000$):** In this regime, the physical signal is heavily suppressed by the instrumental beams. Furthermore, the SO LAT noise power spectrum dominates the tSZ power. The MWF naturally rolls off, driving $T(\ell) \to 0$ and $r_\ell \to 0$. This is the mathematically correct behavior for a Wiener filter: when the Signal-to-Noise Ratio (SNR) drops below unity, the optimal mean-square-error estimator suppresses the prediction to avoid hallucinating noise as signal. Conversely, the ILC baseline forces a spectral combination regardless of the local SNR, resulting in severe noise amplification at high $\ell$.
+
+**Limitations of the Wiener Filter:** While the MWF minimizes global variance, its aggressive suppression at high $\ell$ means that the sharpest features of cluster cores (scales $< 1$ arcmin) are smoothed out. Consequently, the reconstructed $y$-map is a low-pass filtered version of the truth. This necessitates the use of beam-convolved, frequency-specific cluster profiles during the matched-filter detection phase to ensure the spatial templates match the filtered reality.
+
+---
+
+## 4. Cluster Detection Pipeline: Completeness and Purity
+
+To quantify the scientific utility of the reconstructions, we applied a spatial matched filter to both the MWF and ILC $y$-maps, utilizing the radially averaged, beam-convolved cluster profiles. Candidate clusters were extracted using local peak-finding at SNR > 4 and SNR > 5 thresholds.
+
+### Table 2: Cluster Detection Yields
+| Catalog | SNR > 4 Candidates | SNR > 5 Candidates |
+| :--- | :--- | :--- |
+| **Ground Truth ($y > 10^{-6}$)** | N/A | 742,734 |
+| **MWF Reconstruction** | 6,745 | 1,488 |
+| **ILC Baseline** | 8,246 | 1,692 |
+
+*Note: The ground truth catalog contains all halos down to $y = 10^{-6}$, but only a fraction of these are massive enough to be detectable above the noise floor.*
+
+### Interpretation of Detection Yields
+At both SNR thresholds, the ILC baseline produces significantly more candidate detections than the MWF. Cross-matching these candidates with the ground-truth catalog reveals that the excess ILC candidates are predominantly **false positives**.
+
+1. **Purity:** The MWF achieves substantially higher purity across the recovered Compton-$y$ mass range. Because the ILC does not account for the off-diagonal cross-frequency covariance of the CIB, positive CIB fluctuations at high frequencies leak into the ILC $y$-map, creating artificial peaks that the matched filter misidentifies as clusters. The MWF, by explicitly modeling the CIB cross-spectra in $N_\ell$, optimally de-weights these modes, drastically reducing the false discovery rate.
+2. **Completeness:** For high-mass clusters (true peak $y > 5 \times 10^{-5}$), both methods achieve near 100% completeness. However, in the intermediate mass regime, the MWF provides a superior completeness-to-purity trade-off.
+
+---
+
+## 5. The Impact of CIB Contamination
+
+One of the most significant findings of this study is the differential impact of the Cosmic Infrared Background on cluster detection.
+
+- **ILC Degradation:** The purity of the ILC catalog drops precipitously in regions of high CIB intensity. The ILC algorithm interprets the rising CIB SED as a combination of CMB and noise, failing to null it effectively because the tSZ spectral response (which is positive at 353 GHz) is partially degenerate with the CIB spectrum.
+- **MWF Robustness:** The MWF maintains a remarkably flat purity curve even in regions with high local CIB intensity. By utilizing the cross-power spectra between the 353, 545, and 857 GHz channels, the MWF recognizes the spatial signature of the CIB and statistically separates it from the tSZ effect.
+
+**Physical Takeaway:** Multi-frequency information *can* be used to mitigate CIB-induced false detections, but only if the spatial covariance (power spectra) of the foregrounds is explicitly modeled. Hard-nulling or variance-weighting (ILC) is insufficient for non-Gaussian, highly correlated foregrounds like the CIB.
+
+---
+
+## 6. Mass Calibration and Bias
+
+Finally, we evaluated the accuracy of the recovered integrated Compton-$Y$ (aperture-summed within a 3-pixel radius) as a proxy for cluster mass.
+
+1. **Scatter in Recovered $Y$:** The scatter plot of Recovered vs. True Integrated $Y$ demonstrates that the MWF yields a tighter relation with lower variance than the ILC. The ILC exhibits significant upward scatter at low masses, a classic manifestation of Eddington bias exacerbated by unresolved CIB point sources blending with the tSZ decrement/increment.
+2. **Mass Bias:** The fractional mass bias, defined as $(\text{Recovered } Y - \text{True } Y) / \text{True } Y$, reveals a fundamental trade-off.
+   - The **ILC** shows a net positive bias at low masses due to the aforementioned CIB leakage and noise rectification by the peak-finding algorithm.
+   - The **MWF** exhibits a slight *negative* bias (suppression) across the mass range. This is a known property of Wiener filters: because the filter minimizes the mean-square error by multiplying the observation by $S/(S+N)$, the recovered signal is always biased toward zero by a factor of $(1 + N/S)^{-1}$. While this suppression guarantees higher purity and lower overall MSE, it requires that the final cluster catalog be calibrated using a mass-observable scaling relation derived from simulations to correct for the Wiener filter bias.
+
+---
+
+## 7. Conclusion
+
+This research successfully implemented a Multi-Frequency Wiener Filter to extract the tSZ signal from simulated SO LAT and Planck HFI observations. By rigorously handling the $10^{15}$ variance disparity between the CIB and the tSZ signal through Tikhonov regularization, and by explicitly modeling the cross-frequency covariance of the foregrounds, the MWF significantly outperforms a standard ILC baseline.
+
+**Key Findings:**
+- The MWF provides a stable harmonic transfer function that optimally suppresses noise at $\ell > 3000$, avoiding the catastrophic noise amplification seen in ILC approaches.
+- In the spatial domain, the MWF yields a highly pure cluster catalog (1,488 candidates at SNR > 5), effectively eliminating the thousands of CIB-induced false positives that plague the ILC baseline.
+- The MWF is highly robust to local CIB contamination, maintaining high purity even in regions of intense 857 GHz emission.
+- While the MWF introduces a predictable, scale-dependent negative mass bias due to its $S/(S+N)$ formulation, the resulting integrated-$Y$ scatter is significantly tighter, allowing for more precise cosmological mass calibration once the bias is forward-modeled.
+
+These results underscore the necessity of incorporating spatial covariance priors when separating weak, non-Gaussian signals from complex astrophysical foregrounds.
+
+**Respond in exactly this format:**
+
+\\begin{REPORT}
+<REPORT>
+\\end{REPORT}
+
+In <REPORT>, put your report.
+
+###### PROMPT ENDS ########
+
+\begin{COMMENTS}
+The dataset description does not appear to explain the observed issues. The analysis results successfully address the dynamic range and noise constraints described in the dataset (e.g., using Tikhonov regularization for\begin{FEEDBACK}
+The current analysis successfully demonstrates that a Multi-Frequency Wiener Filter (MWF) outperforms the Internal Linear Combination (ILC) baseline by leveraging spatial covariance to the $10^{15}$ variance disparity and applying the specified windowing/loading patterns). The observed "negative mass bias" and "smoothing" of cluster cores are identified by the researchers as expected theoretical consequences of the Wiener filter formulation ($S/(S+N mitigate CIB contamination. However, the current research plan and results exhibit several weaknesses that must be addressed to move from a demonstration\begin{REPORT}
+# Summary: Multi-Frequency Wiener Filter (MWF) for t)$) and the beam-convolved nature of the inputs, rather than failures attributable to constraints in the dataset description.
+\end{COMSZ Extraction
+
+## 1. Methodology and Implementation
+- **Objective:** Reconstruct tSZ Compton-y maps from SO LAT (MENTS}
+
+90, 150, 217 GHz) and Planck HFI (353, 545 of concept to a robust scientific tool.
+
+**1. Addressing the "Wiener Bias" (The Fundamental Trade-off):**
+The, 857 GHz) to improve cluster detection.
+- **Approach:** Implemented a Multi-Frequency Wiener Filter (MWF) using the operator $W_\ell = (S_{\ell, \text{obs}} + N_\ell)^{- report correctly identifies the negative mass bias inherent in the $S/(S+N)$ formulation. Simply stating that this requires "forward1} S_{\ell, \text{tSZ-obs}}$.
+- **Key Decisions:**
+    - **Regularization:** Applied Tikhonov regularization ($\epsilon = 10^{-5}$) to the covariance matrix to handle the $-modeling" is insufficient. Future iterations must quantify this bias as a function of the local noise level and cluster mass. 10^{15}$ variance disparity between CIB and tSZ.
+    - **Standardization:** tSZ ground truth maps were standardized ($\mu = 1.50 \times 10^{-6}$, $\sigma = 1.81 \times 10^{-6}$) to prevent model collapse.
+    - **Covariance:** $
+*   **Action:** Construct a "bias-correction map" or a lookup table $f(Y_{obs}, \text{local\_noise})$ derived from the simulation ground truth. This will allow you to transform the biased MWF output into an unbiased estimateN_\ell$ included CIB auto/cross-spectra as correlated foregrounds, effectively mitigating CIB-induced false detections.
+
+## 2. Main Findings
+- **Performance vs. ILC:** The MWF significantly outperforms the Internal of the true integrated-Y, which is essential for any cosmological application.
+
+**2. Over-reliance on the "Matched Linear Combination (ILC) baseline. While ILC suffers from CIB leakage and noise amplification at $\ell >  Filter" for Detection:**
+You are currently using a spatial matched filter *after* the MWF reconstruction. This is redundant3000$, the MWF naturally rolls off, maintaining high purity.
+- **Detection:** MWF achieved and potentially suboptimal. The MWF is already an optimal linear filter in the harmonic domain. 
+*   **Action higher purity (1,488 candidates at SNR > 5) compared to ILC (1,69:** Investigate whether the MWF output itself, when thresholded, provides a better detection statistic than applying a second matched2 candidates, with significantly higher false-positive rates).
+- **Robustness:** MWF purity remains stable in high-CIB regions, whereas ILC purity degrades due to spectral degeneracy between CIB and tSZ.
+- **Bias:** MWF introduces a predictable filter. If the matched filter is kept, you must justify why the MWF reconstruction (which is already smoothed) requires negative mass bias (suppression) due to the $S/(S+N)$ formulation, which is preferable to the positive further spatial filtering.
+
+**3. Missing CIB-tSZ Correlation Physics:**
+The report notes that the MWF handles bias and high scatter observed in ILC.
+
+## 3. Limitations and Uncertainties
+- **High-ℓ Suppression:** The MWF acts as a low-pass filter, smoothing cluster cores. Spatial fidelity relies on using beam-convolved templates during CIB-tSZ degeneracy better than ILC. However, the current model assumes the CIB is a "correlated foreground matched-filter detection.
+- **Mass Calibration:** The inherent Wiener bias requires forward-modeling or simulation-based calibration to recover" in the noise covariance $N_\ell$. This ignores the physical reality that the CIB and tSZ are spatially true integrated-Y values.
+- **Numerical Stability:** Inversion of the covariance matrix is sensitive to the dynamic range; T correlated (both trace the same large-scale structure). 
+*   **Action:** Explicitly include the cross-power spectrumikhonov regularization is mandatory.
+
+## 4. Future Directions
+- **Calibration:** Develop a mass-observable scaling relation to correct the MW $P_{\ell, \text{tSZ-CIB}}$ in your signal covariance matrix $S_\ell$. CurrentlyF-induced negative bias.
+- **Refinement:** Explore non-linear or iterative reconstruction methods to recover high-ℓ features, you treat CIB as noise; treating it as a signal component with a known cross-correlation will likely improve the separation suppressed by the linear Wiener filter.
+- **Validation:** Extend the analysis to include the impact of kSZ and primary CMB residuals on the mass-bias calibration.
+\end{REPORT} of the two signals, especially in high-density cluster regions.
+
+**4. Validation of the "Look-Elsewhere
+
+ Effect":**
+The report mentions the look-elsewhere effect but does not quantify it. With 1523 patches, the probability of noise fluctuations exceeding the SNR threshold is non-negligible.
+*   **Action:** Run the detection pipeline on pure noise maps (SO+Planck noise only, no signal) to empirically determine the "false detection rate" as a function of SNR. This is the only way to establish a statistically rigorous detection threshold.
+
+**5. Future Iteration Focus:**
+Do not repeat the ILC comparison. It has served its purpose as a baseline. Future work should focus on:
+*   **Mass Calibration:** Moving from "detection" to "mass estimation" by applying the bias-correction derived in point 1.
+*   **Spatial Fidelity:** The current MWF suppresses high-$\ell$ modes. Test if a "constrained" MWF (which preserves the signal at the location of known high-mass clusters) can recover core features without significantly increasing noise.
+
+**Summary of Critique:** You have a solid statistical framework, but you are currently treating the MWF as a "black box" that produces a biased map. The next iteration must focus on **calibrating the bias** and **refining the signal model** to include the physical correlation between tSZ and CIB, rather than just treating CIB as additive noise.
+\end{FEEDBACK}
+
+
+###### PROMPT BEGINS ########
+Human: You are given three inputs:
+1) a dataset description,
+2) the current idea of a project,
+3) a report outlinig the results obtained from previous ideas and methods on the same dataset. 
+
+Your task is to undertand in detail the report, the things tried, and which one worked and which ones didnt work so well. 
+With that information, formulate an idea/hypothesis to carry out with the same dataset that will help understand an aspect of the problem better and can led to better performance on the results. 
+The idea/hypothesis needs to be something new and different to what has been done already.
+Note that your idea/hypothesis will be passed to a set of agents that will make a research plan with it, and that plan will be sent to another agents for writing and executing code.
+Note that your idea/hypothesis need to adhere to the constraints of the dataset. I.e. new data is not available.
+
+Data description:
+
+# Dataset Description: FLAMINGO Lensed Component-Separation Maps
+
+This dataset consists of flat-sky cut maps derived from full-sky maps of the cosmic microwave background (CMB), thermal and kinetic Sunyaev-Zel'dovich effects (tSZ/kSZ), and the cosmic infrared background (CIB). The sky signal maps originate from the FLAMINGO L1_m9 HYDRO_FIDUCIAL simulation (lightcone0, Jeger rotation) — a large-volume (1 Gpc comoving box) hydrodynamical simulation with self-consistent baryonic physics (radiative cooling, star formation, AGN feedback, diffuse gas flows).
+
+The CMB is a Gaussian realization lensed by the FLAMINGO convergence map (κ) via lenspyx, using Planck-like cosmology (h=0.6736, n_s=0.965, A_s=2.1e-9, seed=42).
+
+---
+
+## File Inventory (absolute paths, verified)
+
+All files are under `/home/node/data/compsep_data/cut_maps/`.
+
+### Individual component maps — ground truth, 1 arcmin beam
+Shape: **(1523, 256, 256)**, dtype **float64**
+
+- `/home/node/data/compsep_data/cut_maps/lensed_cmb.npy` — Lensed CMB temperature, µK_CMB
+- `/home/node/data/compsep_data/cut_maps/tsz.npy` — tSZ Compton-y parameter, dimensionless
+- `/home/node/data/compsep_data/cut_maps/ksz.npy` — kSZ Doppler-b parameter, dimensionless
+- `/home/node/data/compsep_data/cut_maps/cib_353.npy` — CIB at 353 GHz, Jy/sr
+- `/home/node/data/compsep_data/cut_maps/cib_545.npy` — CIB at 545 GHz, Jy/sr
+- `/home/node/data/compsep_data/cut_maps/cib_857.npy` — CIB at 857 GHz, Jy/sr
+
+### Stacked (observed) signal maps — frequency-specific beam, no noise
+Shape: **(1523, 256, 256)**, dtype **float64**, units **µK_CMB**
+
+- `/home/node/data/compsep_data/cut_maps/stacked_90.npy` — 90 GHz total signal, beam FWHM 2.2 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_150.npy` — 150 GHz total signal, beam FWHM 1.4 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_217.npy` — 217 GHz total signal, beam FWHM 1.0 arcmin (SO LAT)
+- `/home/node/data/compsep_data/cut_maps/stacked_353.npy` — 353 GHz total signal, beam FWHM 4.5 arcmin (Planck HFI)
+- `/home/node/data/compsep_data/cut_maps/stacked_545.npy` — 545 GHz total signal, beam FWHM 4.72 arcmin (Planck HFI)
+- `/home/node/data/compsep_data/cut_maps/stacked_857.npy` — 857 GHz total signal, beam FWHM 4.42 arcmin (Planck HFI)
+
+The stacked signal at each frequency is: signal(freq) = CIB(freq)*jysr2uk(freq) + tSZ*f_tSZ(freq) + kSZ*f_kSZ + lensed_CMB, then smoothed with the frequency-specific beam. Individual component maps have a 1 arcmin beam.
+
+### Noise maps
+
+**Simons Observatory (SO) LAT noise** — 3000 independent Gaussian realizations
+Shape: **(3000, 256, 256)**, dtype **float64**, units **µK_CMB**
+
+- `/home/node/data/compsep_data/cut_maps/so_noise/90.npy`
+- `/home/node/data/compsep_data/cut_maps/so_noise/150.npy`
+- `/home/node/data/compsep_data/cut_maps/so_noise/217.npy`
+
+SO noise is drawn from the SO LAT v3.1 temperature noise power spectrum (mode 2, elevation 50°, f_sky=0.4). 90 and 150 GHz are correlated (Cholesky decomposition); 217 GHz is independent. **The SO noise index does NOT need to match the sky patch index — sample it randomly.**
+
+**Planck FFP10 noise** — 100 MC realizations per high-frequency channel
+Shape per file: **(1523, 256, 256)**, dtype **float64**
+Filename pattern: `planck_noise_{freq}_{i}.npy`, freq ∈ {353, 545, 857}, i ∈ {0, …, 99}
+
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_353_{0..99}.npy` — units: K_CMB → multiply by 1e6 to get µK_CMB
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_545_{0..99}.npy` — units: MJy/sr → multiply by 1e6 * jysr2uk(545) to get µK_CMB
+- `/home/node/data/compsep_data/cut_maps/planck_noise/planck_noise_857_{0..99}.npy` — units: MJy/sr → multiply by 1e6 * jysr2uk(857) to get µK_CMB
+
+**CRITICAL: For Planck noise, the patch index MUST match the sky patch index (i_patch == i_planck_patch_dim). Load with `np.load(...)[ i_patch ]`.**
+
+---
+
+## Spectral Response and Utility Functions
+
+A `utils.py` module is available at `/home/node/data/compsep_data/utils.py`. **Always import using the absolute path:**
+
+```python
+import sys
+sys.path.insert(0, '/home/node/data/compsep_data')
+import utils
+```
+
+Key functions:
+- `utils.tsz(freq_ghz)` — tSZ spectral response in µK_CMB per Compton-y unit. Example values: tsz(90)≈-4.35e6, tsz(150)≈-2.60e6, tsz(217)≈-2.28e4, tsz(353)≈+3.05e6
+- `utils.ksz(freq_ghz)` — kSZ spectral response in µK_CMB (≈ -T_CMB_µK ≈ -2.726e6, frequency-independent)
+- `utils.jysr2uk(freq_ghz)` — converts Jy/sr to µK_CMB for CIB at given frequency
+- `utils.powers(a, b, ps=10, ell_n=199, window_alpha=None)` — flat-sky angular auto/cross power spectrum
+
+**IMPORTANT — `utils.powers` usage notes:**
+- Always pass `window_alpha=0.5` (Hann taper) when computing cross-power spectra or the cross-correlation coefficient r_ℓ. Without windowing, the raw flat-sky FFT produces r_ℓ ≈ 0 even for perfectly correlated maps due to edge effects and phase artifacts. This is a known numerical issue — do NOT interpret r_ℓ = 0 without windowing as a true absence of correlation.
+- Verify the estimator first: compute the power spectrum of Gaussian white noise and confirm it matches the theoretical expectation (σ² × pixel_area). If not, the pixel-to-physical mapping is wrong.
+
+---
+
+## Critical Signal Properties — Read Before Designing Any Analysis
+
+### Dynamic range warning (ESSENTIAL)
+The tSZ signal is orders of magnitude weaker than the other components:
+
+| Component | Typical variance |
+|-----------|-----------------|
+| Lensed CMB | ~1.25×10⁴ µK² |
+| CIB at 857 GHz | ~3.35×10¹⁰ (Jy/sr)² |
+| tSZ (Compton-y) | ~3.28×10⁻¹² |
+| kSZ | ~1.57×10⁻¹² |
+
+**The tSZ signal is 10¹⁵ times weaker in variance than the CIB at 857 GHz and 10⁷ times weaker than the CMB.**
+
+Consequences for machine learning:
+1. **Always standardize the tSZ target maps** (zero mean, unit variance) before training. Using raw Compton-y values as training targets will cause the network to treat the signal as numerical noise and collapse to predicting zero.
+2. **Never use a global L1/MSE loss on raw tSZ maps** — the background pixels (y ≈ 0) will dominate and the model will learn to predict a flat, near-zero map (model collapse). Use a weighted loss that upweights cluster pixels (y > 10⁻⁷) by a factor of 10³–10⁴, or use a focal/masked loss.
+3. **The tSZ signal is spatially extremely sparse** — massive galaxy clusters occupy <1% of pixels. Any loss function that treats all pixels equally will be dominated by empty-sky pixels.
+
+### Beam convolution (already applied to stacked maps)
+The `stacked_*` maps are already beam-convolved. The ground truth (`tsz.npy`, `lensed_cmb.npy`, etc.) has a 1 arcmin beam. The SR task is to recover 1-arcmin features from beam-smeared inputs:
+- At ℓ > 3000 (< 3.6 arcmin), the SO LAT signal is beam-suppressed and noise-dominated — deterministic pixel-phase recovery is information-theoretically impossible at these scales. Do NOT use a pixel-wise loss to penalize the model for failing to recover high-ℓ phases.
+- The cross-correlation coefficient r_ℓ → 0 at high ℓ is physically expected, not a pipeline bug. Report the transfer function T(ℓ) = P_cross(pred,true)/P_auto(true) instead.
+
+### Spectral loss warning
+A logarithmic spectral consistency loss (penalizing |log C_ℓ^pred - log C_ℓ^true|) will cause catastrophic hallucination. The model will inject non-physical structures to satisfy global power constraints in noise-dominated patches, producing a hallucination fraction of >6000% on pure noise inputs. If a spectral loss is used, it must be:
+- Linear (not logarithmic)
+- Applied only to ℓ > 1000 (not low ℓ which is dominated by the CMB)
+- Applied only to high-SNR multipole bins
+
+---
+
+## Correct Loading Pattern
+
+```python
+import sys, os
+sys.path.insert(0, '/home/node/data/compsep_data')
+import utils
+import numpy as np
+
+os.environ['OMP_NUM_THREADS'] = '16'
+
+BASE = '/home/node/data/compsep_data/cut_maps'
+n_patch = 1523
+n_planck = 100
+n_so = 3000
+
+rng = np.random.default_rng(seed=42)
+i_so_indices = rng.integers(0, n_so, size=n_patch)       # random SO noise per patch
+i_planck_indices = rng.integers(0, n_planck, size=n_patch) # random Planck MC per patch
+
+# Load a single patch (index i_patch):
+i_patch = 0
+i_so = i_so_indices[i_patch]
+i_planck = i_planck_indices[i_patch]
+
+signal_90  = np.load(f'{BASE}/stacked_90.npy')[i_patch]   # µK_CMB
+signal_150 = np.load(f'{BASE}/stacked_150.npy')[i_patch]  # µK_CMB
+signal_217 = np.load(f'{BASE}/stacked_217.npy')[i_patch]  # µK_CMB
+signal_353 = np.load(f'{BASE}/stacked_353.npy')[i_patch]  # µK_CMB
+signal_545 = np.load(f'{BASE}/stacked_545.npy')[i_patch]  # µK_CMB
+signal_857 = np.load(f'{BASE}/stacked_857.npy')[i_patch]  # µK_CMB
+
+noise_90  = np.load(f'{BASE}/so_noise/90.npy')[i_so]      # µK_CMB
+noise_150 = np.load(f'{BASE}/so_noise/150.npy')[i_so]     # µK_CMB
+noise_217 = np.load(f'{BASE}/so_noise/217.npy')[i_so]     # µK_CMB
+
+pn_353_raw = np.load(f'{BASE}/planck_noise/planck_noise_353_{i_planck}.npy')[i_patch]
+pn_545_raw = np.load(f'{BASE}/planck_noise/planck_noise_545_{i_planck}.npy')[i_patch]
+pn_857_raw = np.load(f'{BASE}/planck_noise/planck_noise_857_{i_planck}.npy')[i_patch]
+noise_353 = pn_353_raw * 1e6                           # K_CMB → µK_CMB
+noise_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)     # MJy/sr → µK_CMB
+noise_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)     # MJy/sr → µK_CMB
+
+obs_90  = signal_90  + noise_90
+obs_150 = signal_150 + noise_150
+obs_217 = signal_217 + noise_217
+obs_353 = signal_353 + noise_353
+obs_545 = signal_545 + noise_545
+obs_857 = signal_857 + noise_857
+
+# Ground truth
+tsz_map = np.load(f'{BASE}/tsz.npy')[i_patch]        # Compton-y, dimensionless
+cib_353 = np.load(f'{BASE}/cib_353.npy')[i_patch]    # Jy/sr
+```
+
+**ALWAYS print explicit completion messages at the end of every script step**, e.g.:
+```python
+print(f'Step N completed successfully. Output shape: {array.shape}, saved to data/output.npy')
+```
+This is required for the pipeline controller to detect step completion.
+
+**Do NOT save PyTorch model weights (.pth files) to the experiment output directory** — they exceed GitHub's 100 MB file size limit and will block git pushes. Save model weights to `/tmp/` instead, e.g. `torch.save(model.state_dict(), '/tmp/best_model.pth')`.
+
+---
+
+## Patch Geometry
+
+- 1523 patches, 5°×5°, 256×256 pixels, ≈1.17 arcmin/pixel
+- Full-sky tessellation at 5° step spacing (no galactic cut)
+- Gnomonic (flat-sky) projection, bilinear interpolation from HEALPix nside=8192
+
+## Suggested Research Directions: Cluster Finding
+
+The scientific focus of this project is **galaxy cluster finding** using the tSZ effect. The ground truth cluster catalog can be constructed from peaks in `tsz.npy`, and the task is to detect and characterize clusters in realistic noisy multi-frequency observations.
+
+Possible directions (not exhaustive — Denario should feel free to propose novel approaches):
+
+1. **Detection completeness and purity** — measure cluster detection performance as a function of mass (using peak Compton-y as a mass proxy) in realistic SO+Planck noise. Characterize the survey selection function.
+
+2. **Multi-frequency Matched Filter (MMF)** — implement the standard MMF (optimal linear filter matched to the tSZ spectral signature and cluster profile) and measure detection S/N, completeness, and purity vs. cluster mass. This is the classical baseline used by ACT, SPT, and Planck.
+
+3. **Deep learning cluster finder** — train a detection network (e.g., peak-finding CNN, object detection, or segmentation model) directly on the noisy multi-frequency maps. Compare against the MMF baseline in terms of completeness, purity, and mass bias.
+
+4. **CIB contamination and bias** — quantify how CIB confusion at high frequencies biases cluster detection completeness, purity, and recovered integrated-Y. Can multi-frequency information be used to mitigate CIB-induced false detections?
+
+5. **Mass calibration** — given detected clusters, how accurately can the integrated Compton-Y (aperture-summed within some radius) be recovered as a function of cluster mass and noise level?
+
+## Hardware and Environment
+
+- Python: `/opt/denario-venv/bin/python`
+- 64 vCPUs (AMD Ryzen Threadripper PRO 9995WX), 128 GB RAM
+- NVIDIA RTX PRO 6000 Blackwell Edition, 96 GB VRAM, CUDA 13.0
+- PyTorch GPU: use `device='cuda'`
+- Multiprocessing: limit to ~8–16 workers; set `OMP_NUM_THREADS=16`
+- Load data patch-by-patch or in small batches; avoid loading all 1523 patches simultaneously
+
+
+
+
+Current idea: 
+**Title**: Cross-Spectral Wiener Filtering for Optimal tSZ Extraction and Cluster Detection
+
+**Description**: This research objective implements a Multi-Frequency Wiener Filter (MWF) to reconstruct the tSZ Compton-y signal by incorporating the full multi-frequency signal and noise covariance structure, including the CIB cross-power spectra. Unlike hard-nulling constraints, the MWF statistically weights the 90–857 GHz channels to balance CIB suppression against SO/Planck noise amplification, utilizing the `utils.powers` estimator to generate the required cross-frequency power spectra ($\ell \leq 2000$). To handle the 10¹⁵ variance disparity, the signal covariance matrix is regularized by incorporating the CIB auto- and cross-spectra as distinct components, effectively treating the CIB as a correlated foreground rather than a deterministic template. Cluster profiles are modeled using a beam-convolved, frequency-specific profile derived from the FLAMINGO simulation to ensure spatial fidelity at the 1 arcmin target resolution. Detection performance is evaluated through a matched-filter peak-finding algorithm applied to the reconstructed y-map, with completeness and purity quantified against the ground-truth `tsz.npy` catalog as a function of halo mass and local CIB intensity. This approach avoids the instability of rigid projection by providing a statistically optimal estimator that minimizes the mean-square error in the presence of non-Gaussian foregrounds.
+
+Report with previous results:
+
+
+Iteration 0:
+# Summary: Multi-Frequency Wiener Filter (MWF) for tSZ Extraction
+
+## 1. Methodology and Implementation
+- **Objective:** Reconstruct tSZ Compton-y maps from SO LAT (90, 150, 217 GHz) and Planck HFI (353, 545, 857 GHz) to improve cluster detection.
+- **Approach:** Implemented a Multi-Frequency Wiener Filter (MWF) using the operator $W_\ell = (S_{\ell, \text{obs}} + N_\ell)^{-1} S_{\ell, \text{tSZ-obs}}$.
+- **Key Decisions:**
+    - **Regularization:** Applied Tikhonov regularization ($\epsilon = 10^{-5}$) to the covariance matrix to handle the $10^{15}$ variance disparity between CIB and tSZ.
+    - **Standardization:** tSZ ground truth maps were standardized ($\mu = 1.50 \times 10^{-6}$, $\sigma = 1.81 \times 10^{-6}$) to prevent model collapse.
+    - **Covariance:** $N_\ell$ included CIB auto/cross-spectra as correlated foregrounds, effectively mitigating CIB-induced false detections.
+
+## 2. Main Findings
+- **Performance vs. ILC:** The MWF significantly outperforms the Internal Linear Combination (ILC) baseline. While ILC suffers from CIB leakage and noise amplification at $\ell > 3000$, the MWF naturally rolls off, maintaining high purity.
+- **Detection:** MWF achieved higher purity (1,488 candidates at SNR > 5) compared to ILC (1,692 candidates, with significantly higher false-positive rates).
+- **Robustness:** MWF purity remains stable in high-CIB regions, whereas ILC purity degrades due to spectral degeneracy between CIB and tSZ.
+- **Bias:** MWF introduces a predictable negative mass bias (suppression) due to the $S/(S+N)$ formulation, which is preferable to the positive bias and high scatter observed in ILC.
+
+## 3. Limitations and Uncertainties
+- **High-ℓ Suppression:** The MWF acts as a low-pass filter, smoothing cluster cores. Spatial fidelity relies on using beam-convolved templates during matched-filter detection.
+- **Mass Calibration:** The inherent Wiener bias requires forward-modeling or simulation-based calibration to recover true integrated-Y values.
+- **Numerical Stability:** Inversion of the covariance matrix is sensitive to the dynamic range; Tikhonov regularization is mandatory.
+
+## 4. Future Directions
+- **Calibration:** Develop a mass-observable scaling relation to correct the MWF-induced negative bias.
+- **Refinement:** Explore non-linear or iterative reconstruction methods to recover high-ℓ features suppressed by the linear Wiener filter.
+- **Validation:** Extend the analysis to include the impact of kSZ and primary CMB residuals on the mass-bias calibration.
+        
+
+**Respond in exactly this format:**
+
+\\begin{HYPOTHESIS}
+<HYPOTHESIS>
+\\end{HYPOTHESIS}
+
+In <HYPOTHESIS>, put idea/hypothesis.
+
+
+###### PROMPT ENDS ########
+
+\begin{HYPOTHESIS}
+**Hypothesis: Residual-Guided Iterative Reconstruction (RGIR) for Non-Linear tSZ Recovery.**
+
+The current Multi-Frequency Wiener Filter (MWF) provides a statistically optimal linear reconstruction but suffers from inherent signal suppression (negative bias) and loss of high-frequency spatial fidelity due to its low-pass nature. I hypothesize that a residual-guided iterative approach—where the MWF output serves as a prior for a secondary, non-linear refinement stage—can recover high-ℓ cluster features without the hallucination risks of pure deep learning. 
+
+Specifically, I propose a two-step framework:
+1. **Linear Prior:** Use the existing MWF to generate a "clean" base map that effectively suppresses the CIB and noise.
+2. **Residual Correction:** Train a lightweight, patch-based U-Net (or a similar residual-learning architecture) to predict the *difference* between the ground-truth tSZ map and the MWF-reconstructed map. By training the network to predict only the residual (the high-frequency information lost by the linear filter), the model is constrained by the physical validity of the MWF prior, significantly reducing the risk of non-physical hallucinations. 
+
+This approach addresses the "mass bias" limitation of the MWF by explicitly learning to recover the suppressed power in the cluster cores, while the MWF ensures that the global spectral consistency and noise suppression remain robust. The performance will be evaluated by comparing the recovered integrated-Y (aperture-summed) against the ground truth, specifically measuring the reduction in mass-bias scatter compared to the linear MWF baseline.
+\end{HYPOTHESIS}
+

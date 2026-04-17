@@ -1,0 +1,9 @@
+**Hypothesis: Residual-Guided Iterative Reconstruction (RGIR) for Non-Linear tSZ Recovery.**
+
+The current Multi-Frequency Wiener Filter (MWF) provides a statistically optimal linear reconstruction but suffers from inherent signal suppression (negative bias) and loss of high-frequency spatial fidelity due to its low-pass nature. I hypothesize that a residual-guided iterative approach—where the MWF output serves as a prior for a secondary, non-linear refinement stage—can recover high-ℓ cluster features without the hallucination risks of pure deep learning. 
+
+Specifically, I propose a two-step framework:
+1. **Linear Prior:** Use the existing MWF to generate a "clean" base map that effectively suppresses the CIB and noise.
+2. **Residual Correction:** Train a lightweight, patch-based U-Net (or a similar residual-learning architecture) to predict the *difference* between the ground-truth tSZ map and the MWF-reconstructed map. By training the network to predict only the residual (the high-frequency information lost by the linear filter), the model is constrained by the physical validity of the MWF prior, significantly reducing the risk of non-physical hallucinations. 
+
+This approach addresses the "mass bias" limitation of the MWF by explicitly learning to recover the suppressed power in the cluster cores, while the MWF ensures that the global spectral consistency and noise suppression remain robust. The performance will be evaluated by comparing the recovered integrated-Y (aperture-summed) against the ground truth, specifically measuring the reduction in mass-bias scatter compared to the linear MWF baseline.
