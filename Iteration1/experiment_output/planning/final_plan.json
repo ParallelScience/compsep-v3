@@ -1,0 +1,79 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Compute auto- and cross-power spectra for all 6 frequency channels, the tSZ ground truth, and the CIB maps using utils.powers with window_alpha=0.5, averaging over a representative subset of 400 patches to reduce sample variance.",
+                "Construct the signal covariance matrix S_ell by explicitly including the cross-power spectrum P_ell, tSZ-CIB as a signal component.",
+                "Define the noise covariance matrix N_ell using SO and Planck noise realizations, ensuring the SO 90/150 GHz correlation is captured.",
+                "Validate the estimator by confirming that the power spectrum of Gaussian white noise matches the theoretical expectation (sigma^2 * pixel_area), and save a validation plot as a PNG.",
+                "Save the computed S_ell, N_ell, and all auto/cross power spectra as .npy files to the output directory."
+            ],
+            "sub_task": "Covariance Modeling and Estimator Validation",
+            "sub_task_agent": "engineer",
+            "code_execution_timeout": 3600
+        },
+        {
+            "bullet_points": [
+                "Apply the MWF operator W_ell = (S_ell, obs + N_ell)^-1 S_ell, tSZ-obs (with Tikhonov regularization) to all 1523 signal patches to produce reconstructed y-maps and save these maps to disk.",
+                "Develop a multi-dimensional bias-correction lookup table f(Y_obs, sigma_noise, I_CIB) by comparing the reconstructed y-maps against ground-truth tsz.npy, binning by local noise variance and local CIB intensity."
+            ],
+            "sub_task": "Bias-Corrected MWF Construction",
+            "sub_task_agent": "engineer",
+            "code_execution_timeout": 7200
+        },
+        {
+            "bullet_points": [
+                "Implement a \"constrained\" MWF variant that uses the ground-truth tSZ map as an additional input to the covariance model (treating tSZ signal covariance as known exactly).",
+                "Compute the transfer function T(ell) and the pixel-level correlation coefficient between the constrained output and the ground truth.",
+                "Save the resulting benchmark metrics and a visualization plot of the transfer function as a PNG."
+            ],
+            "sub_task": "Constrained MWF for Spatial Fidelity Benchmark",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Run the detection pipeline on a representative subset of 500 pure noise realizations (SO+Planck noise only) using the same sampling logic for noise indices as the signal patches.",
+                "Calculate the FDR as a function of SNR to establish a statistically rigorous detection threshold that accounts for the \"look-elsewhere effect\" across the 1523 patches."
+            ],
+            "sub_task": "Empirical False Detection Rate (FDR) Calibration",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Perform peak-finding on the standard (unconstrained) MWF output map using the threshold determined in Step 4.",
+                "Apply a spatial matched filter (beam-convolved Arnaud/GNFW profile) in Fourier space at a representative angular scale (e.g., theta_500 approx 1–5 arcmin).",
+                "Cross-match detected peaks against the ground-truth catalog within a 1.5 arcmin radius to assign true-positive/false-positive labels.",
+                "Quantify detection completeness and purity as a function of halo mass, local CIB intensity, and local noise variance."
+            ],
+            "sub_task": "Cluster Detection and Peak-Finding",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Apply the bias-correction lookup table to detected candidates to recover integrated Compton-Y within a 5 arcmin aperture.",
+                "Compare recovered integrated-Y against ground-truth integrated-Y (from tsz.npy) and measure the mass bias.",
+                "Define the mass proxy as the peak Compton-y value from the ground-truth map."
+            ],
+            "sub_task": "Mass Calibration and Performance Quantification",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Generate a single multi-panel figure combining the transfer function T(ell), completeness/purity curves, and mass bias distribution.",
+                "Ensure all plots are saved as high-resolution PNGs with descriptive filenames."
+            ],
+            "sub_task": "Summary Visualization",
+            "sub_task_agent": "engineer",
+            "code_execution_timeout": 7200
+        },
+        {
+            "bullet_points": [
+                "Compile results, explicitly referencing all saved plot filenames (e.g., transfer function, completeness/purity curves, mass bias histogram).",
+                "Include quantitative results such as the 90% completeness mass threshold, purity at the chosen SNR cut, and mean fractional mass bias, drawn from the engineer's outputs.",
+                "Interpret the impact of including P_ell, tSZ-CIB on signal separation and the effectiveness of the bias-correction table."
+            ],
+            "sub_task": "Final Reporting",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}
