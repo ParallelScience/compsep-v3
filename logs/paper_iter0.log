@@ -1,0 +1,31 @@
+/opt/denario-venv/lib/python3.12/site-packages/denario/langgraph_agents/paper_module/LaTeX/AAS_keywords.txt
+Found 6 plot files to process....
+Plot files: ['step_1_diagnostic_plot_1_20260416_234622.png', 'step_2_covariance_spectra_2_20260416_235303.png', 'step_3_cluster_profiles_3_20260416_235510.png']...
+Extracting UNESCO keywords.......
+  Level 1 domains: ['ASTRONOMY & ASTROPHYSICS', 'PHYSICS', 'EARTH AND SPACE SCIENCES', 'MATHEMATICS']
+  Level 2 sub-fields for PHYSICS: ['Fluids (physics of)', 'Optics', 'Theoretical physics', 'Other physical specialities (specify)']
+  Level 3 areas for Fluids (physics of): ['Fluid flow', 'Fluid mechanics', 'Gases', 'Ionisation', 'Plasmas (physics of)', 'Other (specify)']
+  Level 3 areas for Optics: ['Infrared radiation', 'Light', 'Photometry', 'Physical optics', 'Radiometry', 'Spectroscopy']
+  Level 3 areas for Theoretical physics: ['Electromagnetic fields', 'Fields', 'Mass', 'Photons', 'Quantum field theory', 'Radiation (electromagnetic)']
+  Level 2 sub-fields for EARTH AND SPACE SCIENCES: ['Geophysics', 'Space Sciences', 'Other Earth', 'Space or Environmental specialities (specify)', 'Atmospheric sciences']
+  Level 3 areas for Space Sciences: ['Other (specify)', 'Other (specify)', 'Other (specify)', 'Other (specify)', 'Other (specify)', 'Other (specify)']
+  Level 3 areas for Atmospheric sciences: ['Atmospheric dynamics', 'Atmospheric optics', 'Atmospheric structure', 'Atmospheric thermodynamics', 'Numerical modelling', 'Radiotiative transfer']
+  Level 2 sub-fields for MATHEMATICS: ['Numerical analysis', 'Probability', 'Statistics', 'Computer Sciences']
+  Level 3 areas for Numerical analysis: ['Algorithm construction', 'Error analysis', 'Interpolation', 'approximation and curve fitting', 'Iterative methods', 'Linear equations', 'Matrices']
+  Level 3 areas for Probability: ['Application of probability', 'Stochastic processes', 'Markov processes', 'Foundations of probability', 'Analytic probability theory', 'Plausibility']
+  Level 3 areas for Statistics: ['Computing for statistics', 'Data analysis', 'Multivariate analysis', 'Stochastic theory and time series analysis', 'Techniques of statistical inference', 'Techniques of statistical prediction']
+  Level 3 areas for Computer Sciences: ['Artificial intelligence', 'Computer software', 'Digital computing', 'Informatics', 'Programming theory', 'Simulation']
+  Final UNESCO keywords: Statistics, Data analysis, Simulation, Numerical analysis, Algorithm construction, Matrices, Multivariate analysis, Error analysis
+........UNESCO keywords generated
+✅✅.................Abstract written
+✅✅✅✅✅✅...............Captions generated
+✅................Figures generated
+✅.............Introduction written
+✅..................Methods written
+✅..................Results written
+✅..............Conclusions written
+Compiling paper_v1_preliminary...✅✅
+✅..........Refined results written
+Compiling paper_v2_no_citations..✅✅
+Paper written in 5 min 36 sec.
+Cost: $0.538

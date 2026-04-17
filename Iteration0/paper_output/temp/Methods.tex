@@ -1,0 +1,55 @@
+\documentclass[]{article}
+
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{natbib}
+\usepackage{graphicx} 
+
+
+\begin{document}
+
+\subsection{Simulated sky model and observations}
+Our analysis is based on a set of simulated sky maps designed to be representative of observations from the Simons Observatory (SO) and the Planck satellite. The dataset comprises six frequency channels: three from the SO Large Aperture Telescope (LAT) at 90, 150, and 217 GHz, and three from the Planck High Frequency Instrument (HFI) at 353, 545, and 857 GHz. Each map is a superposition of the primary lensed Cosmic Microwave Background (CMB), the thermal Sunyaev-Zel'dovich (tSZ) effect, the kinetic Sunyaev-Zel'dovich (kSZ) effect, and the Cosmic Infrared Background (CIB). The ground truth for each component is taken from the FLAMINGO simulations.
+
+To create realistic observations, instrumental noise was added to each frequency channel. The noise properties were modeled to match the expected performance of the SO LAT and the achieved performance of Planck HFI. The simulations reveal a vast dynamic range in signal variance, with the CIB at 857 GHz being approximately $10^{15}$ times more powerful than the tSZ Compton-$y$ signal. This required the use of high-precision floating-point arithmetic (`float64`) throughout our analysis pipeline to ensure numerical stability. The ground-truth Compton-$y$ map, which serves as our target for reconstruction, was standardized to have zero mean and unit variance before the filtering process to further improve numerical conditioning.
+
+\subsection{Component separation methods}
+We reconstruct the tSZ Compton-$y$ map from the multi-frequency observations using two distinct linear combination methods: a Multi-Frequency Wiener Filter (MWF) and a standard Internal Linear Combination (ILC) which serves as a baseline for comparison. Both methods operate in the harmonic domain.
+
+\subsubsection{Multi-frequency wiener filter}
+The Wiener filter is the optimal linear estimator that minimizes the mean-squared error between the reconstructed map and the true underlying signal. Given a vector of multi-frequency observations in the harmonic domain, $\mathbf{d}_{\ell m}$, the Wiener-filtered estimate of the Compton-$y$ signal, $\hat{y}_{\ell m}$, is given by:
+\begin{equation}
+    \hat{y}_{\ell m} = \mathbf{W}_{\ell}^{\dagger} \mathbf{d}_{\ell m}
+\end{equation}
+where $\mathbf{W}_{\ell}$ is the vector of filter weights at multipole $\ell$. These weights are constructed using the full statistical properties of the signal and noise components:
+\begin{equation}
+    \mathbf{W}_{\ell} = \left( \mathbf{S}_{\ell} + \mathbf{N}_{\ell} \right)^{-1} \mathbf{s}_{\ell, \text{tSZ}}
+\end{equation}
+Here, $\mathbf{S}_{\ell}$ is the $6 \times 6$ covariance matrix of the desired astrophysical signals (CMB, tSZ, kSZ) at multipole $\ell$. The term $\mathbf{s}_{\ell, \text{tSZ}}$ is a 6-element vector representing the cross-power spectrum between the true tSZ signal and the observed signal in each frequency channel.
+
+Crucially, $\mathbf{N}_{\ell}$ is the total noise covariance matrix. In our framework, this matrix includes not only the diagonal instrumental noise power spectra but also the full auto- and cross-frequency power spectra of the CIB. By incorporating the CIB into the noise covariance, we treat it as a source of spatially correlated foreground noise to be statistically suppressed, rather than a signal to be deterministically nulled.
+
+The required auto- and cross-power spectra for all components were estimated empirically from a representative subset of 500 simulated sky patches. To ensure the matrix $(\mathbf{S}_{\ell} + \mathbf{N}_{\ell})$ was invertible despite the large variance disparity across channels, we employed Tikhonov regularization by adding a small term, $\epsilon \mathbf{I}$ with $\epsilon=10^{-5}$, to its diagonal before inversion.
+
+\subsubsection{Internal linear combination}
+For comparison, we implemented a standard Internal Linear Combination (ILC) method. The ILC constructs a Compton-$y$ map by taking a weighted sum of the frequency maps, $\hat{y} = \sum_i w_i d_i$. The weights $w_i$ are chosen to minimize the variance of the final map under the constraint that the tSZ signal is preserved with unit response. This constraint is expressed as $\sum_i w_i g_i = 1$, where $g_i$ is the known spectral response of the tSZ effect in the $i$-th frequency channel. Unlike our MWF implementation, this baseline ILC does not explicitly model the spatial correlations of the CIB.
+
+\subsection{Evaluation metrics}
+The performance of the reconstruction methods was evaluated in both the harmonic and spatial domains.
+
+\subsubsection{Harmonic domain analysis}
+To assess the fidelity of the reconstruction as a function of angular scale, we computed the empirical transfer function, $T(\ell)$, and the cross-correlation coefficient, $r_\ell$. The transfer function measures the fractional response of the filter to the true signal power:
+\begin{equation}
+    T(\ell) = \frac{P_{\text{cross}}(\hat{y}, y_{\text{true}})}{P_{\text{auto}}(y_{\text{true}})}
+\end{equation}
+where $P_{\text{cross}}$ is the cross-power spectrum between the reconstructed and true $y$-maps, and $P_{\text{auto}}$ is the auto-power spectrum of the true map. The cross-correlation coefficient, $r_\ell$, quantifies the phase coherence between the reconstructed and true maps at each multipole.
+
+\subsubsection{Cluster detection and catalog analysis}
+To evaluate the scientific utility of the reconstructed maps, we performed a cluster detection analysis. We employed a spatial matched filter, using a template derived from the radially averaged, beam-convolved profile of galaxy clusters in the simulations. This ensures the filter template matches the spatial characteristics of the signal in the beam-smoothed maps.
+
+Cluster candidates were identified by finding local peaks in the resulting signal-to-noise (SNR) map above thresholds of SNR > 4 and SNR > 5. The resulting candidate lists were then cross-matched with the ground-truth halo catalog to quantify the purity (fraction of detections that are true clusters) and completeness (fraction of true clusters detected) of each method.
+
+Finally, we assessed the quality of the recovered cluster photometry by measuring the integrated Compton-$Y$ parameter for all correctly identified clusters. This was calculated by summing the pixel values within a 3-pixel radius aperture centered on the cluster peak. By comparing the recovered integrated-$Y$ to its true value, we quantified the scatter and bias in the mass-observable relation for both the MWF and ILC reconstructions.
+
+\end{document}
+                

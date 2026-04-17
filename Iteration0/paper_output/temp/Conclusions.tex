@@ -1,0 +1,22 @@
+\documentclass[]{article}
+
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{natbib}
+\usepackage{graphicx} 
+
+
+\begin{document}
+
+
+
+In this work, we have addressed the challenge of extracting the faint thermal Sunyaev-Zel'dovich (tSZ) signal from multi-frequency microwave sky maps in the presence of dominant astrophysical foregrounds. The primary contaminant, the Cosmic Infrared Background (CIB), is spatially correlated with the tSZ signal, complicating its removal with standard component separation techniques. We implemented a Multi-Frequency Wiener Filter (MWF) that leverages the complete statistical description of the sky, incorporating the full auto- and cross-frequency power spectra of all signal, foreground, and noise components. This framework treats the CIB as a source of correlated noise to be optimally suppressed, rather than a signal to be deterministically nulled, as is common in standard Internal Linear Combination (ILC) methods.
+
+We applied our MWF framework to simulated observations representative of the Simons Observatory and Planck satellites across six frequency channels from 90 to 857 GHz. We reconstructed the tSZ Compton-$y$ map and compared its fidelity to a map produced by a conventional ILC. The scientific utility of both reconstructions was evaluated by running a matched-filter cluster detection pipeline and analyzing the resulting catalogs and cluster photometry.
+
+Our results demonstrate the superior performance of the statistically-informed MWF approach. In the harmonic domain, the MWF behaves as an optimal linear filter, suppressing power at small, noise-dominated scales to minimize the mean-squared error, whereas the ILC amplifies noise at these scales. This improved reconstruction quality translates directly to a more robust scientific analysis. The cluster catalog derived from the MWF map exhibits substantially higher purity than the ILC catalog. We found that the ILC's performance degrades significantly in regions of bright CIB emission, confirming that it misidentifies CIB fluctuations as galaxy clusters. The MWF, by explicitly modeling the CIB's spatial correlations, effectively suppresses these spurious sources and maintains high purity regardless of the CIB environment. Furthermore, the MWF yields a tighter mass-observable relation with significantly lower scatter. While the ILC photometry is positively biased by CIB residuals, the MWF exhibits a predictable, scale-dependent suppression of the tSZ signal, a characteristic feature of an optimal filter that minimizes total error.
+
+We have learned that a full statistical treatment of foregrounds is critical for robustly extracting faint cosmological signals from next-generation CMB datasets. By incorporating the complete covariance structure of contaminants like the CIB, the MWF provides a statistically optimal balance between signal preservation and foreground suppression. This leads to higher-fidelity signal maps, which in turn produce higher-purity cluster catalogs and more precise photometric measurements. This approach is essential for maximizing the scientific return of upcoming surveys and realizing their full potential for precision cosmology.
+
+\end{document}
+                

@@ -1,0 +1,139 @@
+
+###### PROMPT BEGINS ########
+System: You are a scientist
+Human: You are provided with:
+- a report on the results of a project. 
+- a plot from the analysis of the project.
+Your task is to create a caption for the plot that will be placed in the results section of a scientific paper. 
+
+Follow these instructions:
+- Write the caption in LaTeX
+- Describe what the plot is showing and relate it to the context below
+- Use the context below to relate the content of the caption to the results section
+- Do not refer to any section or subsection in the text
+- Try to describe what we learn from the image
+- Write the caption to be as short as possible while keeping its content
+- Do not make up anything. The caption should be a description of the plot based on the context below.
+- The caption must be a single paragraph.
+- When writing the caption, take into account that the underscore symbol needs to be written as \_, otherwise it wont compile in LaTeX.
+- Caption must not include tables.
+- If using percentage symbols, use \% instead of %
+
+Context:
+# Cross-Spectral Wiener Filtering for Optimal tSZ Extraction and Cluster Detection: Final Results and Interpretation
+
+## 1. Introduction and Methodological Overview
+
+The extraction of the thermal Sunyaev-Zel'dovich (tSZ) effect from multi-frequency cosmic microwave background (CMB) observations is a fundamental challenge in modern observational cosmology. The tSZ signal, which traces the integrated line-of-sight thermal pressure of ionized gas in galaxy clusters, is spatially sparse and extremely weak compared to primary CMB anisotropies, instrumental noise, and foregrounds such as the Cosmic Infrared Background (CIB). 
+
+In this study, we implemented and evaluated a Multi-Frequency Wiener Filter (MWF) to reconstruct the tSZ Compton-$y$ map from simulated Simons Observatory (SO) LAT (90, 150, 217 GHz) and Planck HFI (353, 545, 857 GHz) observations. Unlike standard Internal Linear Combination (ILC) methods that rely on variance-weighted hard-nulling or simple spectral matching, the MWF leverages the full empirical auto- and cross-power spectra of the observed signals. By treating the CIB and instrumental noise as a unified, correlated noise covariance matrix $N_\ell$, the MWF provides a statistically optimal estimator that minimizes the mean-square error of the reconstructed $y$-map. 
+
+This report details the quantitative performance of the MWF pipeline, compares it against an ILC baseline, and provides a physical interpretation of the results, with a specific focus on cluster detection completeness, purity, and the mitigating effects of the MWF on CIB contamination.
+
+---
+
+## 2. Signal Properties and the Dynamic Range Challenge
+
+A critical preliminary step in our analysis was quantifying the variance disparity across the constituent components. The FLAMINGO L1_m9 HYDRO_FIDUCIAL simulations reveal an extreme dynamic range that dictates the numerical approach to covariance inversion.
+
+### Table 1: Component and Stacked Signal Variances
+| Component / Channel | Variance | Units |
+| :--- | :--- | :--- |
+| **Ground Truth Components** | | |
+| Lensed CMB | $1.26 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| CIB at 857 GHz | $3.36 \times 10^{10}$ | $(\text{Jy/sr})^2$ |
+| tSZ Compton-$y$ | $3.28 \times 10^{-12}$ | Dimensionless |
+| kSZ Doppler-$b$ | $1.57 \times 10^{-12}$ | Dimensionless |
+| **Stacked Observations** | | |
+| 90 GHz (SO LAT) | $1.25 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 150 GHz (SO LAT) | $1.26 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 217 GHz (SO LAT) | $1.28 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 353 GHz (Planck) | $1.46 \times 10^4$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 545 GHz (Planck) | $5.18 \times 10^5$ | $\mu\text{K}_{\text{CMB}}^2$ |
+| 857 GHz (Planck) | $3.84 \times 10^9$ | $\mu\text{K}_{\text{CMB}}^2$ |
+
+As shown in Table 1, the tSZ signal variance is approximately $10^{15}$ times weaker than the CIB at 857 GHz (when converted to comparable temperature units) and $10^7$ times weaker than the primary CMB. 
+
+**Physical Interpretation:** The 857 GHz and 545 GHz channels are overwhelmingly dominated by the CIB, which traces dusty star-forming galaxies. While these channels are crucial for anchoring the dust spectral energy distribution (SED) and removing it from the lower-frequency channels, their massive variance poses a severe numerical risk. During the construction of the MWF, the inversion of the $(S_{\ell, \text{obs}} + N_\ell)$ covariance matrix is highly susceptible to singularity or floating-point truncation errors. To counteract this, we successfully applied Tikhonov regularization ($\epsilon = 10^{-5}$ on the diagonal) and standardized the tSZ target maps ($\mu = 1.50 \times 10^{-6}$, $\sigma = 1.81 \times 10^{-6}$). This ensured stable filter weights across all multipoles.
+
+---
+
+## 3. Harmonic Domain Reconstruction: MWF vs. ILC
+
+The reconstruction quality was first evaluated in the harmonic domain using the empirical transfer function $T(\ell) = P_{\text{cross}}(\text{pred}, \text{true}) / P_{\text{auto}}(\text{true})$ and the cross-correlation coefficient $r_\ell$.
+
+### Transfer Function and Cross-Correlation
+The MWF demonstrates a clear theoretical and practical advantage over the ILC baseline:
+1. **Low to Intermediate Multipoles ($\ell < 2000$):** Both MWF and ILC successfully recover the tSZ signal, with $r_\ell$ approaching unity. However, the MWF exhibits a more stable transfer function. The ILC, which relies on a uniform-weight linear combination based on inverse pixel variance, struggles to optimally suppress the spatially correlated CIB, leading to excess power (and thus $T(\ell) > 1$ artifacts) in intermediate $\ell$ bins.
+2. **High Multipoles ($\ell > 3000$):** In this regime, the physical signal is heavily suppressed by the instrumental beams. Furthermore, the SO LAT noise power spectrum dominates the tSZ power. The MWF naturally rolls off, driving $T(\ell) \to 0$ and $r_\ell \to 0$. This is the mathematically correct behavior for a Wiener filter: when the Signal-to-Noise Ratio (SNR) drops below unity, the optimal mean-square-error estimator suppresses the prediction to avoid hallucinating noise as signal. Conversely, the ILC baseline forces a spectral combination regardless of the local SNR, resulting in severe noise amplification at high $\ell$.
+
+**Limitations of the Wiener Filter:** While the MWF minimizes global variance, its aggressive suppression at high $\ell$ means that the sharpest features of cluster cores (scales $< 1$ arcmin) are smoothed out. Consequently, the reconstructed $y$-map is a low-pass filtered version of the truth. This necessitates the use of beam-convolved, frequency-specific cluster profiles during the matched-filter detection phase to ensure the spatial templates match the filtered reality.
+
+---
+
+## 4. Cluster Detection Pipeline: Completeness and Purity
+
+To quantify the scientific utility of the reconstructions, we applied a spatial matched filter to both the MWF and ILC $y$-maps, utilizing the radially averaged, beam-convolved cluster profiles. Candidate clusters were extracted using local peak-finding at SNR > 4 and SNR > 5 thresholds.
+
+### Table 2: Cluster Detection Yields
+| Catalog | SNR > 4 Candidates | SNR > 5 Candidates |
+| :--- | :--- | :--- |
+| **Ground Truth ($y > 10^{-6}$)** | N/A | 742,734 |
+| **MWF Reconstruction** | 6,745 | 1,488 |
+| **ILC Baseline** | 8,246 | 1,692 |
+
+*Note: The ground truth catalog contains all halos down to $y = 10^{-6}$, but only a fraction of these are massive enough to be detectable above the noise floor.*
+
+### Interpretation of Detection Yields
+At both SNR thresholds, the ILC baseline produces significantly more candidate detections than the MWF. Cross-matching these candidates with the ground-truth catalog reveals that the excess ILC candidates are predominantly **false positives**.
+
+1. **Purity:** The MWF achieves substantially higher purity across the recovered Compton-$y$ mass range. Because the ILC does not account for the off-diagonal cross-frequency covariance of the CIB, positive CIB fluctuations at high frequencies leak into the ILC $y$-map, creating artificial peaks that the matched filter misidentifies as clusters. The MWF, by explicitly modeling the CIB cross-spectra in $N_\ell$, optimally de-weights these modes, drastically reducing the false discovery rate.
+2. **Completeness:** For high-mass clusters (true peak $y > 5 \times 10^{-5}$), both methods achieve near 100% completeness. However, in the intermediate mass regime, the MWF provides a superior completeness-to-purity trade-off.
+
+---
+
+## 5. The Impact of CIB Contamination
+
+One of the most significant findings of this study is the differential impact of the Cosmic Infrared Background on cluster detection.
+
+- **ILC Degradation:** The purity of the ILC catalog drops precipitously in regions of high CIB intensity. The ILC algorithm interprets the rising CIB SED as a combination of CMB and noise, failing to null it effectively because the tSZ spectral response (which is positive at 353 GHz) is partially degenerate with the CIB spectrum.
+- **MWF Robustness:** The MWF maintains a remarkably flat purity curve even in regions with high local CIB intensity. By utilizing the cross-power spectra between the 353, 545, and 857 GHz channels, the MWF recognizes the spatial signature of the CIB and statistically separates it from the tSZ effect.
+
+**Physical Takeaway:** Multi-frequency information *can* be used to mitigate CIB-induced false detections, but only if the spatial covariance (power spectra) of the foregrounds is explicitly modeled. Hard-nulling or variance-weighting (ILC) is insufficient for non-Gaussian, highly correlated foregrounds like the CIB.
+
+---
+
+## 6. Mass Calibration and Bias
+
+Finally, we evaluated the accuracy of the recovered integrated Compton-$Y$ (aperture-summed within a 3-pixel radius) as a proxy for cluster mass.
+
+1. **Scatter in Recovered $Y$:** The scatter plot of Recovered vs. True Integrated $Y$ demonstrates that the MWF yields a tighter relation with lower variance than the ILC. The ILC exhibits significant upward scatter at low masses, a classic manifestation of Eddington bias exacerbated by unresolved CIB point sources blending with the tSZ decrement/increment.
+2. **Mass Bias:** The fractional mass bias, defined as $(\text{Recovered } Y - \text{True } Y) / \text{True } Y$, reveals a fundamental trade-off.
+   - The **ILC** shows a net positive bias at low masses due to the aforementioned CIB leakage and noise rectification by the peak-finding algorithm.
+   - The **MWF** exhibits a slight *negative* bias (suppression) across the mass range. This is a known property of Wiener filters: because the filter minimizes the mean-square error by multiplying the observation by $S/(S+N)$, the recovered signal is always biased toward zero by a factor of $(1 + N/S)^{-1}$. While this suppression guarantees higher purity and lower overall MSE, it requires that the final cluster catalog be calibrated using a mass-observable scaling relation derived from simulations to correct for the Wiener filter bias.
+
+---
+
+## 7. Conclusion
+
+This research successfully implemented a Multi-Frequency Wiener Filter to extract the tSZ signal from simulated SO LAT and Planck HFI observations. By rigorously handling the $10^{15}$ variance disparity between the CIB and the tSZ signal through Tikhonov regularization, and by explicitly modeling the cross-frequency covariance of the foregrounds, the MWF significantly outperforms a standard ILC baseline.
+
+**Key Findings:**
+- The MWF provides a stable harmonic transfer function that optimally suppresses noise at $\ell > 3000$, avoiding the catastrophic noise amplification seen in ILC approaches.
+- In the spatial domain, the MWF yields a highly pure cluster catalog (1,488 candidates at SNR > 5), effectively eliminating the thousands of CIB-induced false positives that plague the ILC baseline.
+- The MWF is highly robust to local CIB contamination, maintaining high purity even in regions of intense 857 GHz emission.
+- While the MWF introduces a predictable, scale-dependent negative mass bias due to its $S/(S+N)$ formulation, the resulting integrated-$Y$ scatter is significantly tighter, allowing for more precise cosmological mass calibration once the bias is forward-modeled.
+
+These results underscore the necessity of incorporating spatial covariance priors when separating weak, non-Gaussian signals from complex astrophysical foregrounds.
+            
+**Respond in exactly this format**
+
+\\begin{Caption}
+<Caption>
+\\end{Caption}
+
+In <Caption> place the figure caption.
+
+###### PROMPT ENDS ########
+
+content='```latex\n\\begin{Caption}\nHarmonic-space performance of the Multi-Frequency Wiener Filter (MWF) versus an Internal Linear Combination (ILC) baseline, showing the transfer function $T(\\ell)$ (left) and the cross-correlation coefficient $r\\_\\ell$ (right). The ILC reconstruction suffers from excess power ($T(\\ell) > 1$) and noise amplification at intermediate and high multipoles, respectively. In contrast, the MWF provides a stable reconstruction by optimally suppressing noise at high $\\ell$ where the signal-to-noise ratio is low. Both methods achieve a high cross-correlation ($r\\_\\ell \\approx 1$) with the true signal at low multipoles ($\\ell < 2000$), which then drops to zero as noise begins to dominate the signal.\n\\end{Caption}\n```' additional_kwargs={} response_metadata={'finish_reason': 'STOP', 'model_name': 'gemini-2.5-pro', 'safety_ratings': [], 'model_provider': 'google_genai'} id='lc_run--019d99b8-f73d-78c3-ad2b-3d0e0233795f-0' tool_calls=[] invalid_tool_calls=[] usage_metadata={'input_tokens': 3339, 'output_tokens': 2504, 'total_tokens': 5843, 'input_token_details': {'cache_read': 0}, 'output_token_details': {'reasoning': 2326}}

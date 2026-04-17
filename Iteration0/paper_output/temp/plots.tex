@@ -1,0 +1,59 @@
+\documentclass[]{article}
+
+\usepackage{amsmath}
+\usepackage{multirow}
+\usepackage{natbib}
+\usepackage{graphicx} 
+
+
+\begin{document}
+
+% Auto-generated figures file
+% \usepackage{graphicx}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.5\textwidth]{../input_files/plots/step_1_diagnostic_plot_1_20260416_234622.png}
+    \caption{The extreme dynamic range of the input signals, which presents a numerical challenge for the Wiener filter. The per-channel signal variance (left) shows that the high-frequency channels (545 and 857 GHz), dominated by the Cosmic Infrared Background (CIB), have a variance approximately five orders of magnitude larger than the lower-frequency channels. The distribution of the target tSZ Compton-$y$ signal is shown in its raw, small-valued form (center) and after standardization (right), a crucial pre-processing step that ensures the numerical stability of the covariance matrix inversion required by the filter.}
+    \label{fig:image0}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.5\textwidth]{../input_files/plots/step_2_covariance_spectra_2_20260416_235303.png}
+    \caption{The empirical auto- and cross-power spectra used as inputs for the Multi-Frequency Wiener Filter. \textit{Left}: The auto-spectra ($C\_\ell$) of the six frequency channels, illustrating the extreme dynamic range where the Cosmic Infrared Background (CIB) dominates the high-frequency channels (545 and 857 GHz) by several orders of magnitude. \textit{Middle}: The absolute cross-power spectra between selected frequency pairs, highlighting the strong spatial correlation of the CIB between the 353 and 857 GHz channels, which is leveraged by the filter to model this foreground. \textit{Right}: The auto-power spectrum of the ground-truth tSZ signal (black) and its cross-correlation with individual frequency channels. A comparison with the left panel demonstrates that the target tSZ signal is orders of magnitude fainter than the total power in any given frequency map, underscoring the signal extraction challenge.}
+    \label{fig:image1}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.5\textwidth]{../input_files/plots/step_3_cluster_profiles_3_20260416_235510.png}
+    \caption{Spatial templates used for the matched-filter cluster detection pipeline. The right panels show the two-dimensional cluster profile for each frequency channel, convolved with the corresponding instrumental beam, while the left panel displays their radially averaged profiles against the original, unconvolved profile (dashed black line). The smoothing effect and peak suppression are most pronounced for the Planck HFI channels (353, 545, and 857 GHz) due to their larger beams. Using these frequency-specific, beam-convolved templates is essential for the matched filter to accurately identify clusters in the reconstructed maps, which are smoothed by both instrumental resolution and the Wiener filter's suppression of small-scale power.}
+    \label{fig:image2}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.5\textwidth]{../input_files/plots/step_4_reconstruction_eval_4.png}
+    \caption{Harmonic-space performance of the Multi-Frequency Wiener Filter (MWF) versus an Internal Linear Combination (ILC) baseline, showing the transfer function $T(\ell)$ (left) and the cross-correlation coefficient $r\_\ell$ (right). The ILC reconstruction suffers from excess power ($T(\ell) > 1$) and noise amplification at intermediate and high multipoles, respectively. In contrast, the MWF provides a stable reconstruction by optimally suppressing noise at high $\ell$ where the signal-to-noise ratio is low. Both methods achieve a high cross-correlation ($r\_\ell \approx 1$) with the true signal at low multipoles ($\ell < 2000$), which then drops to zero as noise begins to dominate the signal.}
+    \label{fig:image3}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.5\textwidth]{../input_files/plots/step_6_completeness_purity_6_20260417_000631.png}
+    \caption{Comparison of cluster detection performance for the Multi-Frequency Wiener Filter (MWF) and an Internal Linear Combination (ILC) baseline. While both methods achieve similar completeness for high-mass clusters (top left), the MWF provides substantially higher purity across the full range of recovered Compton-Y values (top right), whereas the ILC catalog is dominated by false positives at lower signal-to-noise. The bottom panels demonstrate that this performance difference is driven by robustness to Cosmic Infrared Background (CIB) contamination. The MWF maintains high purity even in regions of intense CIB emission, while the ILC's purity degrades significantly, indicating that the ILC misidentifies CIB fluctuations as clusters.}
+    \label{fig:image4}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.5\textwidth]{../input_files/plots/step_6_scatter_bias_6_20260417_000631.png}
+    \caption{Comparison of the recovered integrated Compton-$Y$ and fractional mass bias for the Multi-Frequency Wiener Filter (MWF, blue) and the Internal Linear Combination (ILC, red). The left panel shows that the MWF yields a tighter relation between recovered and true integrated $Y$ with lower scatter than the ILC. The right panel quantifies the fractional mass bias, revealing a large positive bias for the ILC due to Cosmic Infrared Background (CIB) contamination. In contrast, the MWF exhibits a consistent negative bias, a characteristic suppression from the Wiener filter that minimizes the mean-square error.}
+    \label{fig:image5}
+\end{figure}
+
+
+
+\end{document}
+                
