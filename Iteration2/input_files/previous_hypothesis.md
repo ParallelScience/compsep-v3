@@ -1,0 +1,10 @@
+**Title: Morphology-Aware Denoising Diffusion Probabilistic Model (DDPM) for tSZ Reconstruction**
+
+**Hypothesis:** The limitations of linear filters (MWF) and log-spectral regularization (ringing artifacts) stem from their reliance on two-point statistics, which fail to capture the non-Gaussian, spatially sparse morphology of galaxy clusters. I hypothesize that a conditional Denoising Diffusion Probabilistic Model (DDPM), trained to map the multi-frequency noisy observations to the ground-truth tSZ Compton-y maps, will outperform linear methods by learning the high-order spatial correlations (morphology) of clusters. 
+
+Unlike previous attempts, this approach will:
+1. **Avoid Spectral Hallucinations:** By using a score-based generative framework, the model learns the conditional distribution $p(y | \text{obs})$ rather than attempting a direct inversion of the covariance matrix, eliminating the need for unstable spectral regularization.
+2. **Handle Sparsity via Masked Loss:** To address the $10^{15}$ variance disparity and spatial sparsity, the training objective will employ a "Cluster-Weighted Loss" (e.g., a combination of L1 loss and a focal loss on the cluster mask), forcing the network to prioritize the reconstruction of high-y pixels (clusters) over the empty-sky background.
+3. **Multi-Scale Conditioning:** The model will take the multi-frequency maps as conditional inputs, using a U-Net architecture with attention mechanisms to capture both the large-scale spectral signatures (tSZ/CIB separation) and the small-scale spatial features (cluster profiles) simultaneously. 
+
+This method will provide a superior trade-off between completeness and purity by replacing the "ringing" artifacts of linear filters with physically plausible, morphology-aware reconstructions, effectively mitigating CIB confusion through learned spatial priors rather than global power-spectrum constraints.
