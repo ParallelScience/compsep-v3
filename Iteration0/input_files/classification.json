@@ -1,0 +1,7 @@
+{
+  "primary_category": "astro-ph.CO",
+  "secondary_categories": [
+    "astro-ph.IM"
+  ],
+  "justification": "The paper focuses on the extraction of the thermal Sunyaev-Zel'dovich effect from CMB maps, which is a core topic in cosmology (astro-ph.CO). It also details a specific data analysis and signal processing method (Wiener filtering) for astrophysical data, making astro-ph.IM a highly relevant secondary category."
+}

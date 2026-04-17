@@ -1,0 +1,7 @@
+Classifier: Step 1 — Determining archive...
+  Archive: astro-ph — The paper focuses on extracting the thermal Sunyaev-Zel'dovich effect from microwave sky maps to study galaxy clusters, which is a core topic in observational cosmology and astrophysics.
+Classifier: Step 2 — Determining subcategory within 'astro-ph'...
+  Primary: astro-ph.CO
+  Secondary: astro-ph.IM
+  Justification: The paper focuses on the extraction of the thermal Sunyaev-Zel'dovich effect from CMB maps, which is a core topic in cosmology (astro-ph.CO). It also details a specific data analysis and signal processing method (Wiener filtering) for astrophysical data, making astro-ph.IM a highly relevant secondary category.
+Classification completed in 0 min 1 sec. Cost: $0.0000
