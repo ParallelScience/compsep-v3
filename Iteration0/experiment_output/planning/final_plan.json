@@ -1,0 +1,74 @@
+{
+    "sub_tasks": [
+        {
+            "bullet_points": [
+                "Load all six stacked signal maps and all noise maps (SO LAT for 90/150/217 GHz and Planck FFP10 for 353/545/857 GHz) using the specified loading pattern.",
+                "Print per-channel variance statistics to confirm the 10¹⁵ dynamic range disparity.",
+                "Compute and save the tSZ normalization parameters (mean and std over all 1523 patches) to a file.",
+                "Produce a diagnostic plot showing per-channel signal variance and the tSZ histogram before and after standardization, saving it to the database."
+            ],
+            "sub_task": "Data Preprocessing, Normalization, and Diagnostic Analysis",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Compute auto- and cross-power spectra for all 6 frequency channels and the tSZ ground truth on noise-injected observed maps using utils.powers with window_alpha=0.5.",
+                "Estimate noise power spectra separately from dedicated noise-only realizations and add them to the signal covariance.",
+                "Construct the (N_freq+1) x (N_freq+1) x N_ell covariance cube and the tSZ cross-vector.",
+                "Apply Tikhonov regularization, invert the matrices per ell-bin, and save the resulting per-ell Wiener filter weights to disk.",
+                "Produce a diagnostic plot of the diagonal auto-spectra and selected off-diagonal cross-spectra."
+            ],
+            "sub_task": "Covariance Estimation and MWF Construction",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Identify high-mass halos by thresholding tsz.npy at peak y > 5e-5.",
+                "Stack 30x30 pixel cutouts centered on peaks to compute the radially averaged profile.",
+                "Convolve this profile with the appropriate Gaussian beam for each of the six frequency channels.",
+                "Save the beam-convolved profile templates to disk and produce a plot for visual comparison."
+            ],
+            "sub_task": "Cluster Profile Modeling",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Apply the MWF operator to the multi-frequency observation vector to produce the reconstructed Compton-y map.",
+                "Implement an ILC baseline as a uniform-weight linear combination of the six frequency channels after spectral response normalization.",
+                "Save both MWF and ILC reconstructions to disk.",
+                "Produce plots of the transfer function and cross-correlation coefficient for both methods on the same axes."
+            ],
+            "sub_task": "Reconstruction and Baseline Comparison",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Apply the matched filter (using the beam-convolved profile from Step 3) to the reconstructed y-map in Fourier space.",
+                "Normalize the filtered map to SNR units using the local noise estimate.",
+                "Threshold at SNR > 4 and SNR > 5 to identify candidate clusters.",
+                "Construct a ground-truth catalog from noiseless tsz.npy maps using the same peak-finding procedure with a minimum separation criterion."
+            ],
+            "sub_task": "Cluster Detection Pipeline",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Calculate completeness and purity vs. peak Compton-y and local CIB intensity at 857 GHz.",
+                "Generate scatter plots of recovered vs. true integrated-Y and mass bias vs. true peak Compton-y.",
+                "Print all numerical results (bin edges, completeness, purity, mean bias, scatter) to the console and save to a structured file."
+            ],
+            "sub_task": "Performance Quantification",
+            "sub_task_agent": "engineer"
+        },
+        {
+            "bullet_points": [
+                "Report all key numerical results quantitatively, including the ell range where the transfer function exceeds 0.5, 50%/90% completeness thresholds, and purity at those thresholds.",
+                "Compare MWF versus ILC performance on all metrics.",
+                "Discuss the physical interpretation of CIB contamination and the limitations of the Wiener filter at high ell.",
+                "Ensure all intermediate outputs are referenced and interpreted correctly."
+            ],
+            "sub_task": "Final Reporting",
+            "sub_task_agent": "researcher"
+        }
+    ]
+}

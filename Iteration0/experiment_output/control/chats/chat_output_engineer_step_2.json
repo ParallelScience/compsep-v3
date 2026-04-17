@@ -1,0 +1,1023 @@
+[
+  {
+    "name": "control_starter",
+    "content": "",
+    "timestamp": "2026-04-16 23:46:30",
+    "cost": {
+      "Agent": [
+        "control_starter"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0014240000000000001
+      ],
+      "Prompt Tokens": [
+        5618
+      ],
+      "Completion Tokens": [
+        13
+      ],
+      "Total Tokens": [
+        5631
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 2 out of 7.\n\n**Sub-task:** Covariance Estimation and MWF Construction\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Compute auto- and cross-power spectra for all 6 frequency channels and the tSZ ground truth on noise-injected observed maps using utils.powers with window_alpha=0.5.\n- Estimate noise power spectra separately from dedicated noise-only realizations and add them to the signal covariance.\n- Construct the (N_freq+1) x (N_freq+1) x N_ell covariance cube and the tSZ cross-vector.\n- Apply Tikhonov regularization, invert the matrices per ell-bin, and save the resulting per-ell Wiener filter weights to disk.\n- Produce a diagnostic plot of the diagonal auto-spectra and selected off-diagonal cross-spectra.\n\n**Status:** in progress \u23f3\n",
+    "timestamp": "2026-04-16 23:46:30",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "engineer",
+    "content": "**Code Explanation:**\n\nThe script computes the auto- and cross-power spectra for the 6 frequency channels and the tSZ ground truth to construct the Multi-Frequency Wiener Filter (MWF). To avoid sample variance from noise-signal cross-terms, the signal covariance ($S_\\ell$) is computed from the signal-only `stacked_*.npy` maps, and the noise covariance ($N_\\ell$) is computed separately from the noise realizations. The total observed covariance is then constructed as $C_{\\text{obs}} = S_\\ell + N_\\ell$. \n\nThe computation is parallelized across 16 workers over a representative subset of 500 patches. `mmap_mode='r'` is used extensively to ensure memory efficiency, loading only the required 256x256 patches into RAM. \n\nTo handle the extreme $10^{15}$ dynamic range disparity between the tSZ and 857 GHz CIB signals, Tikhonov regularization is applied by adding a small fraction ($\\epsilon = 10^{-5}$) of the variance to the diagonal of the covariance matrix. Furthermore, before inversion, the covariance matrix is normalized into a correlation matrix ($R_\\ell = D^{-1} C_\\ell D^{-1}$), inverted, and then de-normalized. This guarantees numerical stability. The resulting per-$\\ell$ Wiener filter weights $W_\\ell = C_{\\text{obs}}^{-1} C_{\\text{cross}}$ are saved to disk alongside the covariance matrices. A diagnostic plot of the auto- and selected cross-spectra is generated to verify the spectral structure.\n\n**Python Code:**\n\n```python\nimport sys\nimport os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nimport multiprocessing as mp\n\n# Ensure codebase is in path\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, '/home/node/data/compsep_data')\nimport utils\n\ndef get_planck_noise(freq, i_planck, i_patch, base_path):\n    \"\"\"\n    Loads a specific patch from the Planck noise MC realizations.\n    Uses mmap_mode='r' to avoid loading the entire 1523-patch array into memory.\n    \"\"\"\n    filepath = base_path + '/planck_noise/planck_noise_' + str(freq) + '_' + str(i_planck) + '.npy'\n    data = np.load(filepath, mmap_mode='r')\n    return data[i_patch]\n\ndef process_patch(args):\n    \"\"\"\n    Worker function to compute signal and noise power spectra for a single patch.\n    Returns the 7x7 signal covariance S, the 6x6 noise covariance N, and the multipole bins ell.\n    \"\"\"\n    i_patch, i_so, i_planck, base_dir = args\n    \n    # Load signal maps (CMB + tSZ + kSZ + CIB)\n    s_90 = np.load(base_dir + '/stacked_90.npy', mmap_mode='r')[i_patch]\n    s_150 = np.load(base_dir + '/stacked_150.npy', mmap_mode='r')[i_patch]\n    s_217 = np.load(base_dir + '/stacked_217.npy', mmap_mode='r')[i_patch]\n    s_353 = np.load(base_dir + '/stacked_353.npy', mmap_mode='r')[i_patch]\n    s_545 = np.load(base_dir + '/stacked_545.npy', mmap_mode='r')[i_patch]\n    s_857 = np.load(base_dir + '/stacked_857.npy', mmap_mode='r')[i_patch]\n    tsz = np.load(base_dir + '/tsz.npy', mmap_mode='r')[i_patch]\n    \n    signals = [s_90, s_150, s_217, s_353, s_545, s_857, tsz]\n    \n    # Load noise maps\n    n_90 = np.load(base_dir + '/so_noise/90.npy', mmap_mode='r')[i_so]\n    n_150 = np.load(base_dir + '/so_noise/150.npy', mmap_mode='r')[i_so]\n    n_217 = np.load(base_dir + '/so_noise/217.npy', mmap_mode='r')[i_so]\n    \n    pn_353_raw = get_planck_noise(353, i_planck, i_patch, base_dir)\n    pn_545_raw = get_planck_noise(545, i_planck, i_patch, base_dir)\n    pn_857_raw = get_planck_noise(857, i_planck, i_patch, base_dir)\n    \n    # Convert Planck noise to uK_CMB\n    n_353 = pn_353_raw * 1e6\n    n_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)\n    n_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)\n    \n    noises = [n_90, n_150, n_217, n_353, n_545, n_857]\n    \n    # Pixel size in arcmin (5 degrees / 256 pixels)\n    ps_val = 300.0 / 256.0\n    \n    # Get ell bins\n    ell, _ = utils.powers(signals[0], signals[0], ps=ps_val, window_alpha=0.5)\n    n_ell = len(ell)\n    \n    # Compute 7x7 signal covariance (6 frequencies + tSZ)\n    S = np.zeros((7, 7, n_ell))\n    for i in range(7):\n        for j in range(i, 7):\n            _, cl = utils.powers(signals[i], signals[j], ps=ps_val, window_alpha=0.5)\n            S[i, j] = cl\n            if i != j:\n                S[j, i] = cl\n                \n    # Compute 6x6 noise covariance\n    N = np.zeros((6, 6, n_ell))\n    for i in range(6):\n        for j in range(i, 6):\n            # Only compute auto-spectra and known correlated cross-spectra (SO 90 and 150)\n            if i == j or (i == 0 and j == 1):\n                _, cl = utils.powers(noises[i], noises[j], ps=ps_val, window_alpha=0.5)\n                N[i, j] = cl\n                if i != j:\n                    N[j, i] = cl\n                    \n    return S, N, ell\n\ndef main():\n    # Limit OpenBLAS threads to avoid oversubscription with multiprocessing\n    os.environ['OMP_NUM_THREADS'] = '1'\n    \n    print('--------------------------------------------------')\n    print('Verifying utils.powers estimator...')\n    noise_map = np.random.normal(0, 1, (256, 256))\n    ell_test, cl_test = utils.powers(noise_map, noise_map, ps=300.0/256.0, window_alpha=0.5)\n    pixel_area_sr = ( (300.0/256.0) / 60.0 * np.pi / 180.0 )**2\n    print('White noise power spectrum verification:')\n    print('Expected C_ell: ' + np.format_float_scientific(pixel_area_sr, precision=4))\n    print('Measured C_ell (mean): ' + np.format_float_scientific(np.mean(cl_test), precision=4))\n    print('Ratio (Measured/Expected): ' + str(round(np.mean(cl_test) / pixel_area_sr, 4)))\n    print('--------------------------------------------------')\n    \n    base_dir = '/home/node/data/compsep_data/cut_maps'\n    n_patch_total = 1523\n    n_patches_to_use = 500\n    \n    rng = np.random.default_rng(seed=42)\n    patch_indices = rng.choice(n_patch_total, size=n_patches_to_use, replace=False)\n    i_so_indices = rng.integers(0, 3000, size=n_patch_total)\n    i_planck_indices = rng.integers(0, 100, size=n_patch_total)\n    \n    args_list = [(p, i_so_indices[p], i_planck_indices[p], base_dir) for p in patch_indices]\n    \n    print('Starting covariance estimation on ' + str(n_patches_to_use) + ' patches using 16 workers...')\n    \n    num_workers = 16\n    with mp.Pool(processes=num_workers) as pool:\n        results = pool.map(process_patch, args_list)\n        \n    print('Finished computing power spectra. Aggregating results...')\n    \n    ell = results[0][2]\n    n_ell = len(ell)\n    \n    S_sum = np.zeros((7, 7, n_ell))\n    N_sum = np.zeros((6, 6, n_ell))\n    \n    for S, N, _ in results:\n        S_sum += S\n        N_sum += N\n        \n    S_mean = S_sum / n_patches_to_use\n    N_mean = N_sum / n_patches_to_use\n    \n    # Construct total covariance: C_total = S + N\n    C_total = np.zeros((7, 7, n_ell))\n    C_total[:, :, :] = S_mean\n    C_total[:6, :6, :] += N_mean\n    \n    C_obs = C_total[:6, :6, :]\n    C_cross = C_total[:6, 6, :]\n    \n    epsilon = 1e-5\n    print('--------------------------------------------------')\n    print('Condition number of C_obs at ell bin 10 before regularization: ' + np.format_float_scientific(np.linalg.cond(C_obs[:, :, 10]), precision=2))\n    C_k_test = C_obs[:, :, 10] + epsilon * np.diag(np.diag(C_obs[:, :, 10]))\n    print('Condition number of C_obs at ell bin 10 after regularization: ' + np.format_float_scientific(np.linalg.cond(C_k_test), precision=2))\n    d_test = np.sqrt(np.diag(C_k_test))\n    D_inv_test = np.diag(1.0 / d_test)\n    R_k_test = D_inv_test @ C_k_test @ D_inv_test\n    print('Condition number of correlation matrix R_k at ell bin 10: ' + np.format_float_scientific(np.linalg.cond(R_k_test), precision=2))\n    print('--------------------------------------------------')\n    \n    print('Applying Tikhonov regularization and computing Wiener filter weights...')\n    W = np.zeros((6, n_ell))\n    \n    for k in range(n_ell):\n        C_k = C_obs[:, :, k]\n        \n        # Tikhonov regularization scaled by variance\n        reg_term = epsilon * np.diag(np.diag(C_k))\n        C_k_reg = C_k + reg_term\n        \n        # Normalize to correlation matrix for stable inversion\n        d = np.sqrt(np.diag(C_k_reg))\n        D_inv = np.diag(1.0 / d)\n        \n        R_k = D_inv @ C_k_reg @ D_inv\n        inv_R_k = np.linalg.inv(R_k)\n        \n        # De-normalize back to covariance scale\n        inv_C_k = D_inv @ inv_R_k @ D_inv\n        \n        # Compute MWF weights\n        W[:, k] = inv_C_k @ C_cross[:, k]\n        \n    out_filepath = 'data/mwf_weights.npz'\n    np.savez(out_filepath, W=W, ell=ell, C_total=C_total, S_mean=S_mean, N_mean=N_mean)\n    print('Saved Wiener filter weights and covariance to ' + out_filepath)\n    \n    print('Generating diagnostic plot...')\n    plt.rcParams['text.usetex'] = False\n    fig, axs = plt.subplots(1, 2, figsize=(14, 6))\n    \n    channels = ['90 GHz', '150 GHz', '217 GHz', '353 GHz', '545 GHz', '857 GHz', 'tSZ']\n    \n    # Auto-spectra\n    for i in range(7):\n        axs[0].plot(ell, C_total[i, i, :], label=channels[i])\n    axs[0].set_yscale('log')\n    axs[0].set_xscale('log')\n    axs[0].set_xlabel('Multipole ell')\n    axs[0].set_ylabel('Power Spectrum C_ell')\n    axs[0].set_title('Auto-Power Spectra')\n    axs[0].legend(fontsize=8)\n    axs[0].grid(True, which='both', ls='--', alpha=0.5)\n    \n    # Cross-spectra\n    pairs = [(0, 1, '90 x 150'), (3, 5, '353 x 857'), (0, 6, '90 x tSZ'), (5, 6, '857 x tSZ')]\n    for i, j, label in pairs:\n        cross = C_total[i, j, :]\n        axs[1].plot(ell, np.abs(cross), label='|' + label + '|')\n        \n    axs[1].set_yscale('log')\n    axs[1].set_xscale('log')\n    axs[1].set_xlabel('Multipole ell')\n    axs[1].set_ylabel('Absolute Power Spectrum |C_ell|')\n    axs[1].set_title('Selected Cross-Power Spectra')\n    axs[1].legend(fontsize=8)\n    axs[1].grid(True, which='both', ls='--', alpha=0.5)\n    \n    fig.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot_filename = 'data/covariance_spectra_2_' + timestamp + '.png'\n    fig.savefig(plot_filename, dpi=300)\n    print('Diagnostic plot saved to ' + plot_filename)\n    \n    print('Step 2 completed successfully. Output shape: ' + str(W.shape) + ', saved to ' + out_filepath)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-16 23:49:26",
+    "cost": {
+      "Agent": [
+        "engineer"
+      ],
+      "Model": [
+        "gemini-3.1-pro-preview"
+      ],
+      "Cost": [
+        0.077102
+      ],
+      "Prompt Tokens": [
+        16585
+      ],
+      "Completion Tokens": [
+        3661
+      ],
+      "Total Tokens": [
+        20246
+      ]
+    }
+  },
+  {
+    "name": "engineer_response_evaluator",
+    "content": "**Code Explanation:**\n\nThe script computes the auto- and cross-power spectra for the 6 frequency channels and the tSZ ground truth to construct the Multi-Frequency Wiener Filter (MWF). To avoid sample variance from noise-signal cross-terms, the signal covariance (S_ell) is computed from the signal-only stacked_*.npy maps, and the noise covariance (N_ell) is computed separately from the noise realizations. The total observed covariance is then constructed as C_obs = S_ell + N_ell. The computation is parallelized across 16 workers over a representative subset of 500 patches. mmap_mode='r' is used extensively to ensure memory efficiency, loading only the required 256x256 patches into RAM. To handle the extreme 10^15 dynamic range disparity between the tSZ and 857 GHz CIB signals, Tikhonov regularization is applied by adding a small fraction (epsilon = 10^-5) of the variance to the diagonal of the covariance matrix. Furthermore, before inversion, the covariance matrix is normalized into a correlation matrix (R_ell = D^-1 C_ell D^-1), inverted, and then de-normalized. This guarantees numerical stability. The resulting per-ell Wiener filter weights W_ell = C_obs^-1 C_cross are saved to disk alongside the covariance matrices. A diagnostic plot of the auto- and selected cross-spectra is generated to verify the spectral structure.\n\n**Modifications:**\n\nAdded if __name__ == '__main__': block, ensured all paths use data/ for output, removed LaTeX rendering, and fixed string concatenation.\n\n**Python Code:**\n\n```python\n# filename: codebase/step_2.py\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, \"/home/node/data/compsep_data/\")\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nimport multiprocessing as mp\nsys.path.insert(0, os.path.abspath('codebase'))\nsys.path.insert(0, '/home/node/data/compsep_data')\nimport utils\n\ndef get_planck_noise(freq, i_planck, i_patch, base_path):\n    filepath = base_path + '/planck_noise/planck_noise_' + str(freq) + '_' + str(i_planck) + '.npy'\n    data = np.load(filepath, mmap_mode='r')\n    return data[i_patch]\n\ndef process_patch(args):\n    i_patch, i_so, i_planck, base_dir = args\n    s_90 = np.load(base_dir + '/stacked_90.npy', mmap_mode='r')[i_patch]\n    s_150 = np.load(base_dir + '/stacked_150.npy', mmap_mode='r')[i_patch]\n    s_217 = np.load(base_dir + '/stacked_217.npy', mmap_mode='r')[i_patch]\n    s_353 = np.load(base_dir + '/stacked_353.npy', mmap_mode='r')[i_patch]\n    s_545 = np.load(base_dir + '/stacked_545.npy', mmap_mode='r')[i_patch]\n    s_857 = np.load(base_dir + '/stacked_857.npy', mmap_mode='r')[i_patch]\n    tsz = np.load(base_dir + '/tsz.npy', mmap_mode='r')[i_patch]\n    signals = [s_90, s_150, s_217, s_353, s_545, s_857, tsz]\n    n_90 = np.load(base_dir + '/so_noise/90.npy', mmap_mode='r')[i_so]\n    n_150 = np.load(base_dir + '/so_noise/150.npy', mmap_mode='r')[i_so]\n    n_217 = np.load(base_dir + '/so_noise/217.npy', mmap_mode='r')[i_so]\n    pn_353_raw = get_planck_noise(353, i_planck, i_patch, base_dir)\n    pn_545_raw = get_planck_noise(545, i_planck, i_patch, base_dir)\n    pn_857_raw = get_planck_noise(857, i_planck, i_patch, base_dir)\n    n_353 = pn_353_raw * 1e6\n    n_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)\n    n_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)\n    noises = [n_90, n_150, n_217, n_353, n_545, n_857]\n    ps_val = 300.0 / 256.0\n    ell, _ = utils.powers(signals[0], signals[0], ps=ps_val, window_alpha=0.5)\n    n_ell = len(ell)\n    S = np.zeros((7, 7, n_ell))\n    for i in range(7):\n        for j in range(i, 7):\n            _, cl = utils.powers(signals[i], signals[j], ps=ps_val, window_alpha=0.5)\n            S[i, j] = cl\n            if i != j:\n                S[j, i] = cl\n    N = np.zeros((6, 6, n_ell))\n    for i in range(6):\n        for j in range(i, 6):\n            if i == j or (i == 0 and j == 1):\n                _, cl = utils.powers(noises[i], noises[j], ps=ps_val, window_alpha=0.5)\n                N[i, j] = cl\n                if i != j:\n                    N[j, i] = cl\n    return S, N, ell\n\ndef main():\n    os.environ['OMP_NUM_THREADS'] = '1'\n    base_dir = '/home/node/data/compsep_data/cut_maps'\n    n_patch_total = 1523\n    n_patches_to_use = 500\n    rng = np.random.default_rng(seed=42)\n    patch_indices = rng.choice(n_patch_total, size=n_patches_to_use, replace=False)\n    i_so_indices = rng.integers(0, 3000, size=n_patch_total)\n    i_planck_indices = rng.integers(0, 100, size=n_patch_total)\n    args_list = [(p, i_so_indices[p], i_planck_indices[p], base_dir) for p in patch_indices]\n    num_workers = 16\n    with mp.Pool(processes=num_workers) as pool:\n        results = pool.map(process_patch, args_list)\n    ell = results[0][2]\n    n_ell = len(ell)\n    S_sum = np.zeros((7, 7, n_ell))\n    N_sum = np.zeros((6, 6, n_ell))\n    for S, N, _ in results:\n        S_sum += S\n        N_sum += N\n    S_mean = S_sum / n_patches_to_use\n    N_mean = N_sum / n_patches_to_use\n    C_total = np.zeros((7, 7, n_ell))\n    C_total[:, :, :] = S_mean\n    C_total[:6, :6, :] += N_mean\n    C_obs = C_total[:6, :6, :]\n    C_cross = C_total[:6, 6, :]\n    epsilon = 1e-5\n    W = np.zeros((6, n_ell))\n    for k in range(n_ell):\n        C_k = C_obs[:, :, k]\n        reg_term = epsilon * np.diag(np.diag(C_k))\n        C_k_reg = C_k + reg_term\n        d = np.sqrt(np.diag(C_k_reg))\n        D_inv = np.diag(1.0 / d)\n        R_k = D_inv @ C_k_reg @ D_inv\n        inv_R_k = np.linalg.inv(R_k)\n        inv_C_k = D_inv @ inv_R_k @ D_inv\n        W[:, k] = inv_C_k @ C_cross[:, k]\n    out_filepath = 'data/mwf_weights.npz'\n    np.savez(out_filepath, W=W, ell=ell, C_total=C_total, S_mean=S_mean, N_mean=N_mean)\n    plt.rcParams['text.usetex'] = False\n    fig, axs = plt.subplots(1, 2, figsize=(14, 6))\n    channels = ['90 GHz', '150 GHz', '217 GHz', '353 GHz', '545 GHz', '857 GHz', 'tSZ']\n    for i in range(7):\n        axs[0].plot(ell, C_total[i, i, :], label=channels[i])\n    axs[0].set_yscale('log')\n    axs[0].set_xscale('log')\n    axs[0].set_xlabel('Multipole ell')\n    axs[0].set_ylabel('Power Spectrum C_ell')\n    axs[0].set_title('Auto-Power Spectra')\n    axs[0].legend(fontsize=8)\n    axs[0].grid(True, which='both', ls='--', alpha=0.5)\n    pairs = [(0, 1, '90 x 150'), (3, 5, '353 x 857'), (0, 6, '90 x tSZ'), (5, 6, '857 x tSZ')]\n    for i, j, label in pairs:\n        cross = C_total[i, j, :]\n        axs[1].plot(ell, np.abs(cross), label='|' + label + '|')\n    axs[1].set_yscale('log')\n    axs[1].set_xscale('log')\n    axs[1].set_xlabel('Multipole ell')\n    axs[1].set_ylabel('Absolute Power Spectrum |C_ell|')\n    axs[1].set_title('Selected Cross-Power Spectra')\n    axs[1].legend(fontsize=8)\n    axs[1].grid(True, which='both', ls='--', alpha=0.5)\n    fig.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot_filename = 'data/covariance_spectra_2_' + timestamp + '.png'\n    fig.savefig(plot_filename, dpi=300)\n    print('Step 2 completed successfully. Output shape: ' + str(W.shape) + ', saved to ' + out_filepath)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-16 23:49:32",
+    "cost": {
+      "Agent": [
+        "engineer_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.006595750000000001
+      ],
+      "Prompt Tokens": [
+        9679
+      ],
+      "Completion Tokens": [
+        2784
+      ],
+      "Total Tokens": [
+        12463
+      ]
+    }
+  },
+  {
+    "name": "executor",
+    "content": "Execution results:\n\nExecution output: \nStep 2 completed successfully. Output shape: (6, 199), saved to data/mwf_weights.npz\n",
+    "timestamp": "2026-04-16 23:49:39",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "execution_recorder",
+    "content": "Code execution recorded.\n\nExecution output:\nExecution results:\n\nExecution output: \nStep 2 completed successfully. Output shape: (6, 199), saved to data/mwf_weights.npz\n",
+    "timestamp": "2026-04-16 23:49:39",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "executor_response_evaluator",
+    "content": "",
+    "timestamp": "2026-04-16 23:49:40",
+    "cost": {
+      "Agent": [
+        "executor_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00023725000000000002
+      ],
+      "Prompt Tokens": [
+        769
+      ],
+      "Completion Tokens": [
+        30
+      ],
+      "Total Tokens": [
+        799
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Code execution successful. 1 new image(s) generated.\n\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nWorkflow status:\n\nPlan step number: 2\n\nAgent for sub-task (might be different from the next agent suggestion for debugging): engineer\n\nStep status (before execution): in progress\n\nCode status: success\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n\nPlease review the generated images and provide feedback.",
+    "timestamp": "2026-04-16 23:49:40",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "image_reviewer",
+    "content": "[{'type': 'text', 'text': '**Needs Revision:** yes\\n\\n**Issues:**\\n- The x-axis label is \"Multipole ell\", but the values shown are in the range $10^{-10}$ to $10^{-1}$. Multipole $\\\\ell$ values are integers, typically ranging from 2 to several thousands for CMB experiments. The values on the x-axis are physically incorrect for the label.\\n- The y-axis label is \"Power Spectrum C_ell\", but the values shown are in the range $10^2$ to $10^5$. Given the dynamic range warning in the dataset description (tSZ variance $\\\\sim 10^{-12}$, CIB variance $\\\\sim 10^{10}$), these values are not consistent with the raw components. If they are standardized or scaled, this must be explicitly stated in the axis label or title.\\n- The curves in both plots exhibit non-monotonic, \"zig-zag\" behavior, where multiple y-values exist for a single x-value. This indicates a fundamental error in how the data is being plotted, likely due to unsorted $\\\\ell$ bins or an incorrect mapping between the power spectrum output and the $\\\\ell$ values.\\n- The legend in the right plot uses absolute value notation (e.g., $|90 \\\\times 150|$), which is good practice for cross-spectra that can be negative. However, the curves for $|90 \\\\times tSZ|$ and $|857 \\\\times tSZ|$ appear to be missing or are perfectly overlapping with other curves, making them invisible.\\n\\n**Suggestions:**\\n- Correct the x-axis to display integer multipole $\\\\ell$ values (e.g., 100, 1000, 3000). Verify the output of `utils.powers` to ensure you are extracting the correct $\\\\ell$ bins.\\n- Review the units and scaling of the power spectra. If the maps were standardized before computing the spectra, label the y-axis as \"Dimensionless Power Spectrum (Standardized Maps)\". If not, ensure the values are physically plausible and include units (e.g., $\\\\mu K_{CMB}^2$).\\n- Ensure that the $\\\\ell$ values and corresponding $C_\\\\ell$ values are sorted by $\\\\ell$ before plotting to eliminate the zig-zag artifacts.\\n- Investigate why the tSZ cross-spectra are not visible. They might be orders of magnitude lower than the frequency cross-spectra. If so, consider using a separate panel or a broken y-axis to display them, as they are critical for the MWF construction.\\n\\n**Summary:**\\nThe plot contains significant errors in axis scaling and data representation, rendering it scientifically incorrect. The multipole $\\\\ell$ values are wrong by many orders of magnitude, and the plotting order is incorrect, creating artifacts. A full revision is required to fix the data processing and plotting logic.', 'extras': {'signature': 'EjQKMgEMOdbHlAX+fdqnRgR8BenjYWWLEzz8giVZJyATcid6SsJ+Z6slJ/UUmdbGBTfrEnpR'}}]",
+    "timestamp": "2026-04-16 23:49:46",
+    "cost": {
+      "Agent": [
+        "image_reviewer"
+      ],
+      "Model": [
+        "gemini-3.1-flash-image-preview"
+      ],
+      "Cost": [
+        0.0005759249999999999
+      ],
+      "Prompt Tokens": [
+        5251
+      ],
+      "Completion Tokens": [
+        607
+      ],
+      "Total Tokens": [
+        5858
+      ]
+    }
+  },
+  {
+    "name": "image_review_recorder",
+    "content": "",
+    "timestamp": "2026-04-16 23:49:48",
+    "cost": {
+      "Agent": [
+        "image_review_recorder"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00119475
+      ],
+      "Prompt Tokens": [
+        1035
+      ],
+      "Completion Tokens": [
+        624
+      ],
+      "Total Tokens": [
+        1659
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "**Image Review Feedback - Revision Needed**\n\n**Summary:** The plot contains significant errors in axis scaling and data representation, rendering it scientifically incorrect. The multipole $\\ell$ values are wrong by many orders of magnitude, and the plotting order is incorrect, creating artifacts. A full revision is required to fix the data processing and plotting logic.\n\n**Issues:**\n- The x-axis label is \"Multipole ell\", but the values shown are in the range $10^{-10}$ to $10^{-1}$. Multipole $\\ell$ values are integers, typically ranging from 2 to several thousands for CMB experiments. The values on the x-axis are physically incorrect for the label.\n- The y-axis label is \"Power Spectrum C_ell\", but the values shown are in the range $10^2$ to $10^5$. Given the dynamic range warning in the dataset description (tSZ variance $\\sim 10^{-12}$, CIB variance $\\sim 10^{10}$), these values are not consistent with the raw components. If they are standardized or scaled, this must be explicitly stated in the axis label or title.\n- The curves in both plots exhibit non-monotonic, \"zig-zag\" behavior, where multiple y-values exist for a single x-value. This indicates a fundamental error in how the data is being plotted, likely due to unsorted $\\ell$ bins or an incorrect mapping between the power spectrum output and the $\\ell$ values.\n- The legend in the right plot uses absolute value notation (e.g., $|90 \\times 150|$), which is good practice for cross-spectra that can be negative. However, the curves for $|90 \\times tSZ|$ and $|857 \\times tSZ|$ appear to be missing or are perfectly overlapping with other curves, making them invisible.\n\n**Suggestions:**\n- Correct the x-axis to display integer multipole $\\ell$ values (e.g., 100, 1000, 3000). Verify the output of `utils.powers` to ensure you are extracting the correct $\\ell$ bins.\n- Review the units and scaling of the power spectra. If the maps were standardized before computing the spectra, label the y-axis as \"Dimensionless Power Spectrum (Standardized Maps)\". If not, ensure the values are physically plausible and include units (e.g., $\\mu K_{CMB}^2$).\n- Ensure that the $\\ell$ values and corresponding $C_\\ell$ values are sorted by $\\ell$ before plotting to eliminate the zig-zag artifacts.\n- Investigate why the tSZ cross-spectra are not visible. They might be orders of magnitude lower than the frequency cross-spectra. If so, consider using a separate panel or a broken y-axis to display them, as they are critical for the MWF construction.\n\nAttempt 1 of 2. Please fix the plot and regenerate.",
+    "timestamp": "2026-04-16 23:49:48",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "engineer",
+    "content": "**Code Explanation:**\n\nThe previous plot exhibited significant artifacts because the return values of `utils.powers` were swapped: it returns `(cl, ell)`, not `(ell, cl)`. This caused the power spectrum values to be plotted on the x-axis and the multipole bins on the y-axis, leading to the incorrect ranges and the non-monotonic \"zig-zag\" behavior. \n\nThis revision corrects the unpacking of `utils.powers` to properly assign `cl` and `ell`. Additionally, the $\\ell$ bins and corresponding covariance matrices are explicitly sorted to ensure monotonic plotting. \n\nTo address the dynamic range disparity, the diagnostic plot has been expanded to three panels:\n1. **Frequency Auto-Spectra**: Shows the auto-spectra of the 6 frequency channels (values $\\sim 10^2 - 10^5 \\ \\mu K_{CMB}^2$).\n2. **Frequency Cross-Spectra**: Shows selected cross-spectra between frequency channels.\n3. **tSZ Auto and Cross-Spectra**: Shows the tSZ auto-spectrum and its cross-spectra with the frequency channels. Because the tSZ variance is $\\sim 10^{-12}$, these spectra are orders of magnitude smaller ($\\sim 10^{-11}$) and must be plotted on a separate axis to be visible.\n\nThe MWF construction remains the same, utilizing Tikhonov regularization and correlation matrix normalization to ensure stable inversion across the $10^{15}$ dynamic range.\n\n**Modifications:**\n- Swapped the return values of `utils.powers` from `ell, cl` to `cl, ell`.\n- Added an explicit sorting step for `ell` and the covariance matrices before plotting and MWF construction.\n- Expanded the diagnostic plot to 3 panels to separate the high-variance frequency spectra from the low-variance tSZ cross-spectra.\n- Updated axis labels to include appropriate units and removed LaTeX rendering.\n\n**Python Code:**\n\n```python\nimport sys\nimport os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nimport multiprocessing as mp\n\n# Ensure codebase is in path\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, '/home/node/data/compsep_data')\nimport utils\n\ndef get_planck_noise(freq, i_planck, i_patch, base_path):\n    \"\"\"\n    Loads a specific patch from the Planck noise MC realizations.\n    Uses mmap_mode='r' to avoid loading the entire 1523-patch array into memory.\n    \"\"\"\n    filepath = base_path + '/planck_noise/planck_noise_' + str(freq) + '_' + str(i_planck) + '.npy'\n    data = np.load(filepath, mmap_mode='r')\n    return data[i_patch]\n\ndef process_patch(args):\n    \"\"\"\n    Worker function to compute signal and noise power spectra for a single patch.\n    Returns the 7x7 signal covariance S, the 6x6 noise covariance N, and the multipole bins ell.\n    \"\"\"\n    i_patch, i_so, i_planck, base_dir = args\n    \n    # Load signal maps (CMB + tSZ + kSZ + CIB)\n    s_90 = np.load(base_dir + '/stacked_90.npy', mmap_mode='r')[i_patch]\n    s_150 = np.load(base_dir + '/stacked_150.npy', mmap_mode='r')[i_patch]\n    s_217 = np.load(base_dir + '/stacked_217.npy', mmap_mode='r')[i_patch]\n    s_353 = np.load(base_dir + '/stacked_353.npy', mmap_mode='r')[i_patch]\n    s_545 = np.load(base_dir + '/stacked_545.npy', mmap_mode='r')[i_patch]\n    s_857 = np.load(base_dir + '/stacked_857.npy', mmap_mode='r')[i_patch]\n    tsz = np.load(base_dir + '/tsz.npy', mmap_mode='r')[i_patch]\n    \n    signals = [s_90, s_150, s_217, s_353, s_545, s_857, tsz]\n    \n    # Load noise maps\n    n_90 = np.load(base_dir + '/so_noise/90.npy', mmap_mode='r')[i_so]\n    n_150 = np.load(base_dir + '/so_noise/150.npy', mmap_mode='r')[i_so]\n    n_217 = np.load(base_dir + '/so_noise/217.npy', mmap_mode='r')[i_so]\n    \n    pn_353_raw = get_planck_noise(353, i_planck, i_patch, base_dir)\n    pn_545_raw = get_planck_noise(545, i_planck, i_patch, base_dir)\n    pn_857_raw = get_planck_noise(857, i_planck, i_patch, base_dir)\n    \n    # Convert Planck noise to uK_CMB\n    n_353 = pn_353_raw * 1e6\n    n_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)\n    n_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)\n    \n    noises = [n_90, n_150, n_217, n_353, n_545, n_857]\n    \n    # Pixel size in arcmin (5 degrees / 256 pixels)\n    ps_val = 300.0 / 256.0\n    \n    # Get ell bins (utils.powers returns cl, ell)\n    cl, ell = utils.powers(signals[0], signals[0], ps=ps_val, window_alpha=0.5)\n    n_ell = len(ell)\n    \n    # Compute 7x7 signal covariance (6 frequencies + tSZ)\n    S = np.zeros((7, 7, n_ell))\n    for i in range(7):\n        for j in range(i, 7):\n            cl, _ = utils.powers(signals[i], signals[j], ps=ps_val, window_alpha=0.5)\n            S[i, j] = cl\n            if i != j:\n                S[j, i] = cl\n                \n    # Compute 6x6 noise covariance\n    N = np.zeros((6, 6, n_ell))\n    for i in range(6):\n        for j in range(i, 6):\n            # Only compute auto-spectra and known correlated cross-spectra (SO 90 and 150)\n            if i == j or (i == 0 and j == 1):\n                cl, _ = utils.powers(noises[i], noises[j], ps=ps_val, window_alpha=0.5)\n                N[i, j] = cl\n                if i != j:\n                    N[j, i] = cl\n                    \n    return S, N, ell\n\ndef main():\n    # Limit OpenBLAS threads to avoid oversubscription with multiprocessing\n    os.environ['OMP_NUM_THREADS'] = '1'\n    \n    print('--------------------------------------------------')\n    print('Verifying utils.powers estimator...')\n    noise_map = np.random.normal(0, 1, (256, 256))\n    cl_test, ell_test = utils.powers(noise_map, noise_map, ps=300.0/256.0, window_alpha=0.5)\n    pixel_area_sr = ( (300.0/256.0) / 60.0 * np.pi / 180.0 )**2\n    print('White noise power spectrum verification:')\n    print('Expected C_ell: ' + np.format_float_scientific(pixel_area_sr, precision=4))\n    print('Measured C_ell (mean): ' + np.format_float_scientific(np.mean(cl_test), precision=4))\n    print('Ratio (Measured/Expected): ' + str(round(np.mean(cl_test) / pixel_area_sr, 4)))\n    print('--------------------------------------------------')\n    \n    base_dir = '/home/node/data/compsep_data/cut_maps'\n    n_patch_total = 1523\n    n_patches_to_use = 500\n    \n    rng = np.random.default_rng(seed=42)\n    patch_indices = rng.choice(n_patch_total, size=n_patches_to_use, replace=False)\n    i_so_indices = rng.integers(0, 3000, size=n_patch_total)\n    i_planck_indices = rng.integers(0, 100, size=n_patch_total)\n    \n    args_list = [(p, i_so_indices[p], i_planck_indices[p], base_dir) for p in patch_indices]\n    \n    print('Starting covariance estimation on ' + str(n_patches_to_use) + ' patches using 16 workers...')\n    \n    num_workers = 16\n    with mp.Pool(processes=num_workers) as pool:\n        results = pool.map(process_patch, args_list)\n        \n    print('Finished computing power spectra. Aggregating results...')\n    \n    ell = results[0][2]\n    n_ell = len(ell)\n    \n    S_sum = np.zeros((7, 7, n_ell))\n    N_sum = np.zeros((6, 6, n_ell))\n    \n    for S, N, _ in results:\n        S_sum += S\n        N_sum += N\n        \n    S_mean = S_sum / n_patches_to_use\n    N_mean = N_sum / n_patches_to_use\n    \n    # Sort by ell to ensure monotonic plotting and correct MWF application\n    sort_idx = np.argsort(ell)\n    ell = ell[sort_idx]\n    S_mean = S_mean[:, :, sort_idx]\n    N_mean = N_mean[:, :, sort_idx]\n    \n    # Construct total covariance: C_total = S + N\n    C_total = np.zeros((7, 7, n_ell))\n    C_total[:, :, :] = S_mean\n    C_total[:6, :6, :] += N_mean\n    \n    C_obs = C_total[:6, :6, :]\n    C_cross = C_total[:6, 6, :]\n    \n    epsilon = 1e-5\n    print('--------------------------------------------------')\n    print('Condition number of C_obs at ell bin 10 before regularization: ' + np.format_float_scientific(np.linalg.cond(C_obs[:, :, 10]), precision=2))\n    C_k_test = C_obs[:, :, 10] + epsilon * np.diag(np.diag(C_obs[:, :, 10]))\n    print('Condition number of C_obs at ell bin 10 after regularization: ' + np.format_float_scientific(np.linalg.cond(C_k_test), precision=2))\n    d_test = np.sqrt(np.diag(C_k_test))\n    D_inv_test = np.diag(1.0 / d_test)\n    R_k_test = D_inv_test @ C_k_test @ D_inv_test\n    print('Condition number of correlation matrix R_k at ell bin 10: ' + np.format_float_scientific(np.linalg.cond(R_k_test), precision=2))\n    print('--------------------------------------------------')\n    \n    print('Applying Tikhonov regularization and computing Wiener filter weights...')\n    W = np.zeros((6, n_ell))\n    \n    for k in range(n_ell):\n        C_k = C_obs[:, :, k]\n        \n        # Tikhonov regularization scaled by variance\n        reg_term = epsilon * np.diag(np.diag(C_k))\n        C_k_reg = C_k + reg_term\n        \n        # Normalize to correlation matrix for stable inversion\n        d = np.sqrt(np.diag(C_k_reg))\n        D_inv = np.diag(1.0 / d)\n        \n        R_k = D_inv @ C_k_reg @ D_inv\n        inv_R_k = np.linalg.inv(R_k)\n        \n        # De-normalize back to covariance scale\n        inv_C_k = D_inv @ inv_R_k @ D_inv\n        \n        # Compute MWF weights\n        W[:, k] = inv_C_k @ C_cross[:, k]\n        \n    out_filepath = 'data/mwf_weights.npz'\n    np.savez(out_filepath, W=W, ell=ell, C_total=C_total, S_mean=S_mean, N_mean=N_mean)\n    print('Saved Wiener filter weights and covariance to ' + out_filepath)\n    \n    print('Generating diagnostic plot...')\n    plt.rcParams['text.usetex'] = False\n    fig, axs = plt.subplots(1, 3, figsize=(18, 5))\n    \n    channels = ['90 GHz', '150 GHz', '217 GHz', '353 GHz', '545 GHz', '857 GHz', 'tSZ']\n    \n    # Panel 1: Auto-spectra of frequency channels\n    for i in range(6):\n        axs[0].plot(ell, C_total[i, i, :], label=channels[i])\n    axs[0].set_yscale('log')\n    axs[0].set_xscale('log')\n    axs[0].set_xlabel('Multipole ell')\n    axs[0].set_ylabel('Power Spectrum C_ell [uK_CMB^2]')\n    axs[0].set_title('Frequency Auto-Spectra')\n    axs[0].legend(fontsize=8)\n    axs[0].grid(True, which='both', ls='--', alpha=0.5)\n    \n    # Panel 2: Frequency Cross-spectra\n    pairs_freq = [(0, 1, '90 x 150'), (1, 2, '150 x 217'), (3, 5, '353 x 857')]\n    for i, j, label in pairs_freq:\n        cross = C_total[i, j, :]\n        axs[1].plot(ell, np.abs(cross), label='|' + label + '|')\n        \n    axs[1].set_yscale('log')\n    axs[1].set_xscale('log')\n    axs[1].set_xlabel('Multipole ell')\n    axs[1].set_ylabel('Absolute Power Spectrum |C_ell| [uK_CMB^2]')\n    axs[1].set_title('Frequency Cross-Spectra')\n    axs[1].legend(fontsize=8)\n    axs[1].grid(True, which='both', ls='--', alpha=0.5)\n    \n    # Panel 3: tSZ Auto and Cross-spectra\n    axs[2].plot(ell, C_total[6, 6, :], label='tSZ Auto', color='black', linewidth=2)\n    pairs_tsz = [(0, 6, '90 x tSZ'), (1, 6, '150 x tSZ'), (5, 6, '857 x tSZ')]\n    for i, j, label in pairs_tsz:\n        cross = C_total[i, j, :]\n        axs[2].plot(ell, np.abs(cross), label='|' + label + '|')\n        \n    axs[2].set_yscale('log')\n    axs[2].set_xscale('log')\n    axs[2].set_xlabel('Multipole ell')\n    axs[2].set_ylabel('Absolute Power Spectrum |C_ell|')\n    axs[2].set_title('tSZ Auto and Cross-Spectra')\n    axs[2].legend(fontsize=8)\n    axs[2].grid(True, which='both', ls='--', alpha=0.5)\n    \n    fig.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot_filename = 'data/covariance_spectra_2_' + timestamp + '.png'\n    fig.savefig(plot_filename, dpi=300)\n    print('Diagnostic plot saved to ' + plot_filename)\n    \n    print('Step 2 completed successfully. Output shape: ' + str(W.shape) + ', saved to ' + out_filepath)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-16 23:51:18",
+    "cost": {
+      "Agent": [
+        "engineer",
+        "engineer"
+      ],
+      "Model": [
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview"
+      ],
+      "Cost": [
+        0.077102,
+        0.17664800000000003
+      ],
+      "Prompt Tokens": [
+        16585,
+        41746
+      ],
+      "Completion Tokens": [
+        3661,
+        7763
+      ],
+      "Total Tokens": [
+        20246,
+        49509
+      ]
+    }
+  },
+  {
+    "name": "engineer_response_evaluator",
+    "content": "**Code Explanation:**\n\nThe previous plot exhibited significant artifacts because the return values of utils.powers were swapped: it returns (cl, ell), not (ell, cl). This caused the power spectrum values to be plotted on the x-axis and the multipole bins on the y-axis, leading to the incorrect ranges and the non-monotonic zig-zag behavior. This revision corrects the unpacking of utils.powers to properly assign cl and ell. Additionally, the ell bins and corresponding covariance matrices are explicitly sorted to ensure monotonic plotting. To address the dynamic range disparity, the diagnostic plot has been expanded to three panels: 1. Frequency Auto-Spectra: Shows the auto-spectra of the 6 frequency channels (values ~ 10^2 - 10^5 uK_CMB^2). 2. Frequency Cross-Spectra: Shows selected cross-spectra between frequency channels. 3. tSZ Auto and Cross-Spectra: Shows the tSZ auto-spectrum and its cross-spectra with the frequency channels. Because the tSZ variance is ~ 10^-12, these spectra are orders of magnitude smaller (~ 10^-11) and must be plotted on a separate axis to be visible. The MWF construction remains the same, utilizing Tikhonov regularization and correlation matrix normalization to ensure stable inversion across the 10^15 dynamic range.\n\n**Modifications:**\n\nSwapped the return values of utils.powers from ell, cl to cl, ell. Added an explicit sorting step for ell and the covariance matrices before plotting and MWF construction. Expanded the diagnostic plot to 3 panels to separate the high-variance frequency spectra from the low-variance tSZ cross-spectra. Updated axis labels to include appropriate units and removed LaTeX rendering.\n\n**Python Code:**\n\n```python\n# filename: codebase/step_2.py\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, \"/home/node/data/compsep_data/\")\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nimport multiprocessing as mp\nsys.path.insert(0, os.path.abspath('codebase'))\nsys.path.insert(0, '/home/node/data/compsep_data')\nimport utils\n\ndef get_planck_noise(freq, i_planck, i_patch, base_path):\n    filepath = base_path + '/planck_noise/planck_noise_' + str(freq) + '_' + str(i_planck) + '.npy'\n    data = np.load(filepath, mmap_mode='r')\n    return data[i_patch]\n\ndef process_patch(args):\n    i_patch, i_so, i_planck, base_dir = args\n    s_90 = np.load(base_dir + '/stacked_90.npy', mmap_mode='r')[i_patch]\n    s_150 = np.load(base_dir + '/stacked_150.npy', mmap_mode='r')[i_patch]\n    s_217 = np.load(base_dir + '/stacked_217.npy', mmap_mode='r')[i_patch]\n    s_353 = np.load(base_dir + '/stacked_353.npy', mmap_mode='r')[i_patch]\n    s_545 = np.load(base_dir + '/stacked_545.npy', mmap_mode='r')[i_patch]\n    s_857 = np.load(base_dir + '/stacked_857.npy', mmap_mode='r')[i_patch]\n    tsz = np.load(base_dir + '/tsz.npy', mmap_mode='r')[i_patch]\n    signals = [s_90, s_150, s_217, s_353, s_545, s_857, tsz]\n    n_90 = np.load(base_dir + '/so_noise/90.npy', mmap_mode='r')[i_so]\n    n_150 = np.load(base_dir + '/so_noise/150.npy', mmap_mode='r')[i_so]\n    n_217 = np.load(base_dir + '/so_noise/217.npy', mmap_mode='r')[i_so]\n    pn_353_raw = get_planck_noise(353, i_planck, i_patch, base_dir)\n    pn_545_raw = get_planck_noise(545, i_planck, i_patch, base_dir)\n    pn_857_raw = get_planck_noise(857, i_planck, i_patch, base_dir)\n    n_353 = pn_353_raw * 1e6\n    n_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)\n    n_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)\n    noises = [n_90, n_150, n_217, n_353, n_545, n_857]\n    ps_val = 300.0 / 256.0\n    cl, ell = utils.powers(signals[0], signals[0], ps=ps_val, window_alpha=0.5)\n    n_ell = len(ell)\n    S = np.zeros((7, 7, n_ell))\n    for i in range(7):\n        for j in range(i, 7):\n            cl, _ = utils.powers(signals[i], signals[j], ps=ps_val, window_alpha=0.5)\n            S[i, j] = cl\n            if i != j:\n                S[j, i] = cl\n    N = np.zeros((6, 6, n_ell))\n    for i in range(6):\n        for j in range(i, 6):\n            if i == j or (i == 0 and j == 1):\n                cl, _ = utils.powers(noises[i], noises[j], ps=ps_val, window_alpha=0.5)\n                N[i, j] = cl\n                if i != j:\n                    N[j, i] = cl\n    return S, N, ell\n\ndef main():\n    os.environ['OMP_NUM_THREADS'] = '1'\n    base_dir = '/home/node/data/compsep_data/cut_maps'\n    n_patch_total = 1523\n    n_patches_to_use = 500\n    rng = np.random.default_rng(seed=42)\n    patch_indices = rng.choice(n_patch_total, size=n_patches_to_use, replace=False)\n    i_so_indices = rng.integers(0, 3000, size=n_patch_total)\n    i_planck_indices = rng.integers(0, 100, size=n_patch_total)\n    args_list = [(p, i_so_indices[p], i_planck_indices[p], base_dir) for p in patch_indices]\n    num_workers = 16\n    with mp.Pool(processes=num_workers) as pool:\n        results = pool.map(process_patch, args_list)\n    ell = results[0][2]\n    n_ell = len(ell)\n    S_sum = np.zeros((7, 7, n_ell))\n    N_sum = np.zeros((6, 6, n_ell))\n    for S, N, _ in results:\n        S_sum += S\n        N_sum += N\n    S_mean = S_sum / n_patches_to_use\n    N_mean = N_sum / n_patches_to_use\n    sort_idx = np.argsort(ell)\n    ell = ell[sort_idx]\n    S_mean = S_mean[:, :, sort_idx]\n    N_mean = N_mean[:, :, sort_idx]\n    C_total = np.zeros((7, 7, n_ell))\n    C_total[:, :, :] = S_mean\n    C_total[:6, :6, :] += N_mean\n    C_obs = C_total[:6, :6, :]\n    C_cross = C_total[:6, 6, :]\n    epsilon = 1e-5\n    W = np.zeros((6, n_ell))\n    for k in range(n_ell):\n        C_k = C_obs[:, :, k]\n        reg_term = epsilon * np.diag(np.diag(C_k))\n        C_k_reg = C_k + reg_term\n        d = np.sqrt(np.diag(C_k_reg))\n        D_inv = np.diag(1.0 / d)\n        R_k = D_inv @ C_k_reg @ D_inv\n        inv_R_k = np.linalg.inv(R_k)\n        inv_C_k = D_inv @ inv_R_k @ D_inv\n        W[:, k] = inv_C_k @ C_cross[:, k]\n    out_filepath = 'data/mwf_weights.npz'\n    np.savez(out_filepath, W=W, ell=ell, C_total=C_total, S_mean=S_mean, N_mean=N_mean)\n    plt.rcParams['text.usetex'] = False\n    fig, axs = plt.subplots(1, 3, figsize=(18, 5))\n    channels = ['90 GHz', '150 GHz', '217 GHz', '353 GHz', '545 GHz', '857 GHz', 'tSZ']\n    for i in range(6):\n        axs[0].plot(ell, C_total[i, i, :], label=channels[i])\n    axs[0].set_yscale('log')\n    axs[0].set_xscale('log')\n    axs[0].set_xlabel('Multipole ell')\n    axs[0].set_ylabel('Power Spectrum C_ell [uK_CMB^2]')\n    axs[0].set_title('Frequency Auto-Spectra')\n    axs[0].legend(fontsize=8)\n    axs[0].grid(True, which='both', ls='--', alpha=0.5)\n    pairs_freq = [(0, 1, '90 x 150'), (1, 2, '150 x 217'), (3, 5, '353 x 857')]\n    for i, j, label in pairs_freq:\n        cross = C_total[i, j, :]\n        axs[1].plot(ell, np.abs(cross), label='|' + label + '|')\n    axs[1].set_yscale('log')\n    axs[1].set_xscale('log')\n    axs[1].set_xlabel('Multipole ell')\n    axs[1].set_ylabel('Absolute Power Spectrum |C_ell| [uK_CMB^2]')\n    axs[1].set_title('Frequency Cross-Spectra')\n    axs[1].legend(fontsize=8)\n    axs[1].grid(True, which='both', ls='--', alpha=0.5)\n    axs[2].plot(ell, C_total[6, 6, :], label='tSZ Auto', color='black', linewidth=2)\n    pairs_tsz = [(0, 6, '90 x tSZ'), (1, 6, '150 x tSZ'), (5, 6, '857 x tSZ')]\n    for i, j, label in pairs_tsz:\n        cross = C_total[i, j, :]\n        axs[2].plot(ell, np.abs(cross), label='|' + label + '|')\n    axs[2].set_yscale('log')\n    axs[2].set_xscale('log')\n    axs[2].set_xlabel('Multipole ell')\n    axs[2].set_ylabel('Absolute Power Spectrum |C_ell|')\n    axs[2].set_title('tSZ Auto and Cross-Spectra')\n    axs[2].legend(fontsize=8)\n    axs[2].grid(True, which='both', ls='--', alpha=0.5)\n    fig.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot_filename = 'data/covariance_spectra_2_' + timestamp + '.png'\n    fig.savefig(plot_filename, dpi=300)\n    print('Diagnostic plot saved to ' + plot_filename)\n    print('Step 2 completed successfully. Output shape: ' + str(W.shape) + ', saved to ' + out_filepath)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-16 23:51:25",
+    "cost": {
+      "Agent": [
+        "engineer_response_evaluator",
+        "engineer_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.006595750000000001,
+        0.015973750000000002
+      ],
+      "Prompt Tokens": [
+        9679,
+        28375
+      ],
+      "Completion Tokens": [
+        2784,
+        5920
+      ],
+      "Total Tokens": [
+        12463,
+        34295
+      ]
+    }
+  },
+  {
+    "name": "executor",
+    "content": "Execution results:\n\nExecution output: \nDiagnostic plot saved to data/covariance_spectra_2_20260416_235132.png\nStep 2 completed successfully. Output shape: (6, 199), saved to data/mwf_weights.npz\n",
+    "timestamp": "2026-04-16 23:51:32",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "execution_recorder",
+    "content": "Code execution recorded.\n\nExecution output:\nExecution results:\n\nExecution output: \nDiagnostic plot saved to data/covariance_spectra_2_20260416_235132.png\nStep 2 completed successfully. Output shape: (6, 199), saved to data/mwf_weights.npz\n",
+    "timestamp": "2026-04-16 23:51:32",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "executor_response_evaluator",
+    "content": "",
+    "timestamp": "2026-04-16 23:51:33",
+    "cost": {
+      "Agent": [
+        "executor_response_evaluator",
+        "executor_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00023725000000000002,
+        0.000482
+      ],
+      "Prompt Tokens": [
+        769,
+        1568
+      ],
+      "Completion Tokens": [
+        30,
+        60
+      ],
+      "Total Tokens": [
+        799,
+        1628
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Code execution successful. 1 new image(s) generated.\n\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nWorkflow status:\n\nPlan step number: 2\n\nAgent for sub-task (might be different from the next agent suggestion for debugging): engineer\n\nStep status (before execution): in progress\n\nCode status: success\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n\nPlease review the generated images and provide feedback.",
+    "timestamp": "2026-04-16 23:51:33",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "image_reviewer",
+    "content": "[{'type': 'text', 'text': '**Needs Revision:** yes\\n\\n**Issues:**\\n- The y-axis label for the third panel (\"tSZ Auto and Cross-Spectra\") is missing units. It should be `[C_ell]` or similar, but the current label is just `Absolute Power Spectrum |C_ell|`. Given the dynamic range, it\\'s likely dimensionless (Compton-y squared) or in \u00b5K_CMB^2 depending on how the cross-spectra were computed. The prompt specifies tSZ is dimensionless, so the auto-spectrum should be dimensionless. The cross-spectra with frequency maps should be in \u00b5K_CMB. The plot mixes these, so the label needs to be careful. A better label would be `Power Spectrum |C_ell|` and the legend should clarify the units for each curve, or use a dual y-axis if appropriate. At minimum, the label is incomplete.\\n- The dynamic range in the third panel is extremely large (10^-8 to 10^-22). While the tSZ auto-spectrum is indeed very small, the cross-spectra with high frequencies (e.g., 857 GHz) are dominated by CIB and are much larger. The plot correctly shows this, but the label needs to reflect the mixed units.\\n- The prompt explicitly warns about the dynamic range of tSZ (10^-12 variance). The tSZ auto-spectrum (black line) is around 10^-18 to 10^-22, which is consistent with this. The cross-spectra are much higher due to the other components in the frequency maps.\\n\\n**Suggestions:**\\n- In the third panel, update the y-axis label to `Power Spectrum |C_ell|`.\\n- In the legend of the third panel, explicitly state the units for each curve. For example: `tSZ Auto (dimensionless)`, `|90 x tSZ| (\u00b5K_CMB)`, etc. This will resolve the ambiguity of mixing units on a single axis.\\n- Ensure that the `utils.powers` function was indeed called with `window_alpha=0.5` as requested, although this cannot be verified from the image alone. The spectra look reasonable, suggesting it might have been used.\\n\\n**Summary:**\\nThe diagnostic plot is mostly good, showing the expected hierarchy of power spectra. However, the third panel mixes dimensionless tSZ auto-spectra with \u00b5K_CMB-unit cross-spectra on the same axis without clarifying the units in the label or legend, which is scientifically inaccurate. The y-axis label is also incomplete. Needs revision to clarify units.', 'extras': {'signature': 'EjQKMgEMOdbHAe+VwjZi3ZKIRwDtbQV2TVyn7camnjl7D4GxatOt/Rm5Qw85rqe8m4SNhXf6'}}]",
+    "timestamp": "2026-04-16 23:51:39",
+    "cost": {
+      "Agent": [
+        "image_reviewer",
+        "image_reviewer"
+      ],
+      "Model": [
+        "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-image-preview"
+      ],
+      "Cost": [
+        0.0005759249999999999,
+        0.000558825
+      ],
+      "Prompt Tokens": [
+        5251,
+        5251
+      ],
+      "Completion Tokens": [
+        607,
+        550
+      ],
+      "Total Tokens": [
+        5858,
+        5801
+      ]
+    }
+  },
+  {
+    "name": "image_review_recorder",
+    "content": "",
+    "timestamp": "2026-04-16 23:51:40",
+    "cost": {
+      "Agent": [
+        "image_review_recorder",
+        "image_review_recorder"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00119475,
+        0.0018470000000000001
+      ],
+      "Prompt Tokens": [
+        1035,
+        2006
+      ],
+      "Completion Tokens": [
+        624,
+        897
+      ],
+      "Total Tokens": [
+        1659,
+        2903
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "**Image Review Feedback - Revision Needed**\n\n**Summary:** The diagnostic plot is mostly good, showing the expected hierarchy of power spectra. However, the third panel mixes dimensionless tSZ auto-spectra with \u00b5K_CMB-unit cross-spectra on the same axis without clarifying the units in the label or legend, which is scientifically inaccurate. The y-axis label is also incomplete. Needs revision to clarify units.\n\n**Issues:**\n- The y-axis label for the third panel (\"tSZ Auto and Cross-Spectra\") is missing units.\n- The dynamic range in the third panel is extremely large, and the plot mixes dimensionless tSZ auto-spectra with \u00b5K_CMB-unit cross-spectra on the same axis without clarifying the units in the label or legend.\n\n**Suggestions:**\n- In the third panel, update the y-axis label to `Power Spectrum |C_ell|`.\n- In the legend of the third panel, explicitly state the units for each curve (e.g., `tSZ Auto (dimensionless)`, `|90 x tSZ| (\u00b5K_CMB)`).\n- Ensure that the `utils.powers` function was indeed called with `window_alpha=0.5` as requested.\n\nAttempt 2 of 2. Please fix the plot and regenerate.",
+    "timestamp": "2026-04-16 23:51:40",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "engineer",
+    "content": "**Code Explanation:**\n\nThe script computes the auto- and cross-power spectra for the 6 frequency channels and the tSZ ground truth to construct the Multi-Frequency Wiener Filter (MWF). The signal covariance ($S_\\ell$) is computed from the signal-only `stacked_*.npy` maps, and the noise covariance ($N_\\ell$) is computed separately from the noise realizations. The total observed covariance is then constructed as $C_{\\text{obs}} = S_\\ell + N_\\ell$. The computation is parallelized across 16 workers over a representative subset of 500 patches. `mmap_mode='r'` is used extensively to ensure memory efficiency.\n\nTo handle the extreme $10^{15}$ dynamic range disparity between the tSZ and 857 GHz CIB signals, Tikhonov regularization is applied by adding a small fraction ($\\epsilon = 10^{-5}$) of the variance to the diagonal of the covariance matrix. Furthermore, before inversion, the covariance matrix is normalized into a correlation matrix ($R_\\ell = D^{-1} C_\\ell D^{-1}$), inverted, and then de-normalized. This guarantees numerical stability. The resulting per-$\\ell$ Wiener filter weights $W_\\ell = C_{\\text{obs}}^{-1} C_{\\text{cross}}$ are saved to disk alongside the covariance matrices.\n\nA diagnostic plot of the auto- and selected cross-spectra is generated to verify the spectral structure. The third panel of the plot has been updated to clarify the units of the tSZ auto-spectrum (dimensionless) and the cross-spectra ($\\mu K_{CMB}$).\n\n**Modifications:**\n- Updated the y-axis label of the third panel to `Power Spectrum |C_ell|`.\n- Explicitly stated the units for each curve in the legend of the third panel to resolve the ambiguity of mixing dimensionless and $\\mu K_{CMB}$ units on the same axis.\n- Verified that `utils.powers` is called with `window_alpha=0.5` for all power spectrum computations.\n\n**Python Code:**\n\n```python\nimport sys\nimport os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nimport multiprocessing as mp\n\n# Ensure codebase is in path\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, '/home/node/data/compsep_data')\nimport utils\n\ndef get_planck_noise(freq, i_planck, i_patch, base_path):\n    \"\"\"\n    Loads a specific patch from the Planck noise MC realizations.\n    Uses mmap_mode='r' to avoid loading the entire 1523-patch array into memory.\n    \"\"\"\n    filepath = base_path + '/planck_noise/planck_noise_' + str(freq) + '_' + str(i_planck) + '.npy'\n    data = np.load(filepath, mmap_mode='r')\n    return data[i_patch]\n\ndef process_patch(args):\n    \"\"\"\n    Worker function to compute signal and noise power spectra for a single patch.\n    Returns the 7x7 signal covariance S, the 6x6 noise covariance N, and the multipole bins ell.\n    \"\"\"\n    i_patch, i_so, i_planck, base_dir = args\n    \n    # Load signal maps (CMB + tSZ + kSZ + CIB)\n    s_90 = np.load(base_dir + '/stacked_90.npy', mmap_mode='r')[i_patch]\n    s_150 = np.load(base_dir + '/stacked_150.npy', mmap_mode='r')[i_patch]\n    s_217 = np.load(base_dir + '/stacked_217.npy', mmap_mode='r')[i_patch]\n    s_353 = np.load(base_dir + '/stacked_353.npy', mmap_mode='r')[i_patch]\n    s_545 = np.load(base_dir + '/stacked_545.npy', mmap_mode='r')[i_patch]\n    s_857 = np.load(base_dir + '/stacked_857.npy', mmap_mode='r')[i_patch]\n    tsz = np.load(base_dir + '/tsz.npy', mmap_mode='r')[i_patch]\n    \n    signals = [s_90, s_150, s_217, s_353, s_545, s_857, tsz]\n    \n    # Load noise maps\n    n_90 = np.load(base_dir + '/so_noise/90.npy', mmap_mode='r')[i_so]\n    n_150 = np.load(base_dir + '/so_noise/150.npy', mmap_mode='r')[i_so]\n    n_217 = np.load(base_dir + '/so_noise/217.npy', mmap_mode='r')[i_so]\n    \n    pn_353_raw = get_planck_noise(353, i_planck, i_patch, base_dir)\n    pn_545_raw = get_planck_noise(545, i_planck, i_patch, base_dir)\n    pn_857_raw = get_planck_noise(857, i_planck, i_patch, base_dir)\n    \n    # Convert Planck noise to uK_CMB\n    n_353 = pn_353_raw * 1e6\n    n_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)\n    n_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)\n    \n    noises = [n_90, n_150, n_217, n_353, n_545, n_857]\n    \n    # Pixel size in arcmin (5 degrees / 256 pixels)\n    ps_val = 300.0 / 256.0\n    \n    # Get ell bins (utils.powers returns cl, ell)\n    cl, ell = utils.powers(signals[0], signals[0], ps=ps_val, window_alpha=0.5)\n    n_ell = len(ell)\n    \n    # Compute 7x7 signal covariance (6 frequencies + tSZ)\n    S = np.zeros((7, 7, n_ell))\n    for i in range(7):\n        for j in range(i, 7):\n            cl, _ = utils.powers(signals[i], signals[j], ps=ps_val, window_alpha=0.5)\n            S[i, j] = cl\n            if i != j:\n                S[j, i] = cl\n                \n    # Compute 6x6 noise covariance\n    N = np.zeros((6, 6, n_ell))\n    for i in range(6):\n        for j in range(i, 6):\n            # Only compute auto-spectra and known correlated cross-spectra (SO 90 and 150)\n            if i == j or (i == 0 and j == 1):\n                cl, _ = utils.powers(noises[i], noises[j], ps=ps_val, window_alpha=0.5)\n                N[i, j] = cl\n                if i != j:\n                    N[j, i] = cl\n                    \n    return S, N, ell\n\ndef main():\n    # Limit OpenBLAS threads to avoid oversubscription with multiprocessing\n    os.environ['OMP_NUM_THREADS'] = '1'\n    \n    print('--------------------------------------------------')\n    print('Verifying utils.powers estimator...')\n    noise_map = np.random.normal(0, 1, (256, 256))\n    cl_test, ell_test = utils.powers(noise_map, noise_map, ps=300.0/256.0, window_alpha=0.5)\n    pixel_area_sr = ( (300.0/256.0) / 60.0 * np.pi / 180.0 )**2\n    print('White noise power spectrum verification:')\n    print('Expected C_ell: ' + np.format_float_scientific(pixel_area_sr, precision=4))\n    print('Measured C_ell (mean): ' + np.format_float_scientific(np.mean(cl_test), precision=4))\n    print('Ratio (Measured/Expected): ' + str(round(np.mean(cl_test) / pixel_area_sr, 4)))\n    print('--------------------------------------------------')\n    \n    base_dir = '/home/node/data/compsep_data/cut_maps'\n    n_patch_total = 1523\n    n_patches_to_use = 500\n    \n    rng = np.random.default_rng(seed=42)\n    patch_indices = rng.choice(n_patch_total, size=n_patches_to_use, replace=False)\n    i_so_indices = rng.integers(0, 3000, size=n_patch_total)\n    i_planck_indices = rng.integers(0, 100, size=n_patch_total)\n    \n    args_list = [(p, i_so_indices[p], i_planck_indices[p], base_dir) for p in patch_indices]\n    \n    print('Starting covariance estimation on ' + str(n_patches_to_use) + ' patches using 16 workers...')\n    \n    num_workers = 16\n    with mp.Pool(processes=num_workers) as pool:\n        results = pool.map(process_patch, args_list)\n        \n    print('Finished computing power spectra. Aggregating results...')\n    \n    ell = results[0][2]\n    n_ell = len(ell)\n    \n    S_sum = np.zeros((7, 7, n_ell))\n    N_sum = np.zeros((6, 6, n_ell))\n    \n    for S, N, _ in results:\n        S_sum += S\n        N_sum += N\n        \n    S_mean = S_sum / n_patches_to_use\n    N_mean = N_sum / n_patches_to_use\n    \n    # Sort by ell to ensure monotonic plotting and correct MWF application\n    sort_idx = np.argsort(ell)\n    ell = ell[sort_idx]\n    S_mean = S_mean[:, :, sort_idx]\n    N_mean = N_mean[:, :, sort_idx]\n    \n    # Construct total covariance: C_total = S + N\n    C_total = np.zeros((7, 7, n_ell))\n    C_total[:, :, :] = S_mean\n    C_total[:6, :6, :] += N_mean\n    \n    C_obs = C_total[:6, :6, :]\n    C_cross = C_total[:6, 6, :]\n    \n    epsilon = 1e-5\n    print('--------------------------------------------------')\n    print('Condition number of C_obs at ell bin 10 before regularization: ' + np.format_float_scientific(np.linalg.cond(C_obs[:, :, 10]), precision=2))\n    C_k_test = C_obs[:, :, 10] + epsilon * np.diag(np.diag(C_obs[:, :, 10]))\n    print('Condition number of C_obs at ell bin 10 after regularization: ' + np.format_float_scientific(np.linalg.cond(C_k_test), precision=2))\n    d_test = np.sqrt(np.diag(C_k_test))\n    D_inv_test = np.diag(1.0 / d_test)\n    R_k_test = D_inv_test @ C_k_test @ D_inv_test\n    print('Condition number of correlation matrix R_k at ell bin 10: ' + np.format_float_scientific(np.linalg.cond(R_k_test), precision=2))\n    print('--------------------------------------------------')\n    \n    print('Applying Tikhonov regularization and computing Wiener filter weights...')\n    W = np.zeros((6, n_ell))\n    \n    for k in range(n_ell):\n        C_k = C_obs[:, :, k]\n        \n        # Tikhonov regularization scaled by variance\n        reg_term = epsilon * np.diag(np.diag(C_k))\n        C_k_reg = C_k + reg_term\n        \n        # Normalize to correlation matrix for stable inversion\n        d = np.sqrt(np.diag(C_k_reg))\n        D_inv = np.diag(1.0 / d)\n        \n        R_k = D_inv @ C_k_reg @ D_inv\n        inv_R_k = np.linalg.inv(R_k)\n        \n        # De-normalize back to covariance scale\n        inv_C_k = D_inv @ inv_R_k @ D_inv\n        \n        # Compute MWF weights\n        W[:, k] = inv_C_k @ C_cross[:, k]\n        \n    out_filepath = 'data/mwf_weights.npz'\n    np.savez(out_filepath, W=W, ell=ell, C_total=C_total, S_mean=S_mean, N_mean=N_mean)\n    print('Saved Wiener filter weights and covariance to ' + out_filepath)\n    \n    print('Generating diagnostic plot...')\n    plt.rcParams['text.usetex'] = False\n    fig, axs = plt.subplots(1, 3, figsize=(18, 5))\n    \n    channels = ['90 GHz', '150 GHz', '217 GHz', '353 GHz', '545 GHz', '857 GHz', 'tSZ']\n    \n    # Panel 1: Auto-spectra of frequency channels\n    for i in range(6):\n        axs[0].plot(ell, C_total[i, i, :], label=channels[i])\n    axs[0].set_yscale('log')\n    axs[0].set_xscale('log')\n    axs[0].set_xlabel('Multipole ell')\n    axs[0].set_ylabel('Power Spectrum C_ell [uK_CMB^2]')\n    axs[0].set_title('Frequency Auto-Spectra')\n    axs[0].legend(fontsize=8)\n    axs[0].grid(True, which='both', ls='--', alpha=0.5)\n    \n    # Panel 2: Frequency Cross-spectra\n    pairs_freq = [(0, 1, '90 x 150'), (1, 2, '150 x 217'), (3, 5, '353 x 857')]\n    for i, j, label in pairs_freq:\n        cross = C_total[i, j, :]\n        axs[1].plot(ell, np.abs(cross), label='|' + label + '|')\n        \n    axs[1].set_yscale('log')\n    axs[1].set_xscale('log')\n    axs[1].set_xlabel('Multipole ell')\n    axs[1].set_ylabel('Absolute Power Spectrum |C_ell| [uK_CMB^2]')\n    axs[1].set_title('Frequency Cross-Spectra')\n    axs[1].legend(fontsize=8)\n    axs[1].grid(True, which='both', ls='--', alpha=0.5)\n    \n    # Panel 3: tSZ Auto and Cross-spectra\n    axs[2].plot(ell, C_total[6, 6, :], label='tSZ Auto (dimensionless)', color='black', linewidth=2)\n    pairs_tsz = [(0, 6, '90 x tSZ'), (1, 6, '150 x tSZ'), (5, 6, '857 x tSZ')]\n    for i, j, label in pairs_tsz:\n        cross = C_total[i, j, :]\n        axs[2].plot(ell, np.abs(cross), label='|' + label + '| (uK_CMB)')\n        \n    axs[2].set_yscale('log')\n    axs[2].set_xscale('log')\n    axs[2].set_xlabel('Multipole ell')\n    axs[2].set_ylabel('Power Spectrum |C_ell|')\n    axs[2].set_title('tSZ Auto and Cross-Spectra')\n    axs[2].legend(fontsize=8)\n    axs[2].grid(True, which='both', ls='--', alpha=0.5)\n    \n    fig.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot_filename = 'data/covariance_spectra_2_' + timestamp + '.png'\n    fig.savefig(plot_filename, dpi=300)\n    print('Diagnostic plot saved to ' + plot_filename)\n    \n    print('Step 2 completed successfully. Output shape: ' + str(W.shape) + ', saved to ' + out_filepath)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-16 23:52:02",
+    "cost": {
+      "Agent": [
+        "engineer",
+        "engineer",
+        "engineer"
+      ],
+      "Model": [
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview"
+      ],
+      "Cost": [
+        0.077102,
+        0.17664800000000003,
+        0.29387
+      ],
+      "Prompt Tokens": [
+        16585,
+        41746,
+        75565
+      ],
+      "Completion Tokens": [
+        3661,
+        7763,
+        11895
+      ],
+      "Total Tokens": [
+        20246,
+        49509,
+        87460
+      ]
+    }
+  },
+  {
+    "name": "engineer_response_evaluator",
+    "content": "**Code Explanation:**\n\nThe script computes the auto- and cross-power spectra for the 6 frequency channels and the tSZ ground truth to construct the Multi-Frequency Wiener Filter (MWF). The signal covariance (S_ell) is computed from the signal-only stacked_*.npy maps, and the noise covariance (N_ell) is computed separately from the noise realizations. The total observed covariance is then constructed as C_obs = S_ell + N_ell. The computation is parallelized across 16 workers over a representative subset of 500 patches. mmap_mode='r' is used extensively to ensure memory efficiency. To handle the extreme 10^15 dynamic range disparity between the tSZ and 857 GHz CIB signals, Tikhonov regularization is applied by adding a small fraction (epsilon = 10^-5) of the variance to the diagonal of the covariance matrix. Furthermore, before inversion, the covariance matrix is normalized into a correlation matrix (R_ell = D^-1 C_ell D^-1), inverted, and then de-normalized. This guarantees numerical stability. The resulting per-ell Wiener filter weights W_ell = C_obs^-1 C_cross are saved to disk alongside the covariance matrices. A diagnostic plot of the auto- and selected cross-spectra is generated to verify the spectral structure. The third panel of the plot has been updated to clarify the units of the tSZ auto-spectrum (dimensionless) and the cross-spectra (uK_CMB).\n\n**Modifications:**\n\nUpdated the y-axis label of the third panel to Power Spectrum |C_ell|. Explicitly stated the units for each curve in the legend of the third panel to resolve the ambiguity of mixing dimensionless and uK_CMB units on the same axis. Verified that utils.powers is called with window_alpha=0.5 for all power spectrum computations.\n\n**Python Code:**\n\n```python\n# filename: codebase/step_2.py\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, \"/home/node/data/compsep_data/\")\nsys.path.insert(0, '/home/node/data/compsep_data')\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nimport multiprocessing as mp\nimport utils\n\ndef get_planck_noise(freq, i_planck, i_patch, base_path):\n    filepath = base_path + '/planck_noise/planck_noise_' + str(freq) + '_' + str(i_planck) + '.npy'\n    data = np.load(filepath, mmap_mode='r')\n    return data[i_patch]\n\ndef process_patch(args):\n    i_patch, i_so, i_planck, base_dir = args\n    s_90 = np.load(base_dir + '/stacked_90.npy', mmap_mode='r')[i_patch]\n    s_150 = np.load(base_dir + '/stacked_150.npy', mmap_mode='r')[i_patch]\n    s_217 = np.load(base_dir + '/stacked_217.npy', mmap_mode='r')[i_patch]\n    s_353 = np.load(base_dir + '/stacked_353.npy', mmap_mode='r')[i_patch]\n    s_545 = np.load(base_dir + '/stacked_545.npy', mmap_mode='r')[i_patch]\n    s_857 = np.load(base_dir + '/stacked_857.npy', mmap_mode='r')[i_patch]\n    tsz = np.load(base_dir + '/tsz.npy', mmap_mode='r')[i_patch]\n    signals = [s_90, s_150, s_217, s_353, s_545, s_857, tsz]\n    n_90 = np.load(base_dir + '/so_noise/90.npy', mmap_mode='r')[i_so]\n    n_150 = np.load(base_dir + '/so_noise/150.npy', mmap_mode='r')[i_so]\n    n_217 = np.load(base_dir + '/so_noise/217.npy', mmap_mode='r')[i_so]\n    pn_353_raw = get_planck_noise(353, i_planck, i_patch, base_dir)\n    pn_545_raw = get_planck_noise(545, i_planck, i_patch, base_dir)\n    pn_857_raw = get_planck_noise(857, i_planck, i_patch, base_dir)\n    n_353 = pn_353_raw * 1e6\n    n_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)\n    n_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)\n    noises = [n_90, n_150, n_217, n_353, n_545, n_857]\n    ps_val = 300.0 / 256.0\n    cl, ell = utils.powers(signals[0], signals[0], ps=ps_val, window_alpha=0.5)\n    n_ell = len(ell)\n    S = np.zeros((7, 7, n_ell))\n    for i in range(7):\n        for j in range(i, 7):\n            cl, _ = utils.powers(signals[i], signals[j], ps=ps_val, window_alpha=0.5)\n            S[i, j] = cl\n            if i != j:\n                S[j, i] = cl\n    N = np.zeros((6, 6, n_ell))\n    for i in range(6):\n        for j in range(i, 6):\n            if i == j or (i == 0 and j == 1):\n                cl, _ = utils.powers(noises[i], noises[j], ps=ps_val, window_alpha=0.5)\n                N[i, j] = cl\n                if i != j:\n                    N[j, i] = cl\n    return S, N, ell\n\ndef main():\n    os.environ['OMP_NUM_THREADS'] = '1'\n    base_dir = '/home/node/data/compsep_data/cut_maps'\n    n_patch_total = 1523\n    n_patches_to_use = 500\n    rng = np.random.default_rng(seed=42)\n    patch_indices = rng.choice(n_patch_total, size=n_patches_to_use, replace=False)\n    i_so_indices = rng.integers(0, 3000, size=n_patch_total)\n    i_planck_indices = rng.integers(0, 100, size=n_patch_total)\n    args_list = [(p, i_so_indices[p], i_planck_indices[p], base_dir) for p in patch_indices]\n    num_workers = 16\n    with mp.Pool(processes=num_workers) as pool:\n        results = pool.map(process_patch, args_list)\n    ell = results[0][2]\n    n_ell = len(ell)\n    S_sum = np.zeros((7, 7, n_ell))\n    N_sum = np.zeros((6, 6, n_ell))\n    for S, N, _ in results:\n        S_sum += S\n        N_sum += N\n    S_mean = S_sum / n_patches_to_use\n    N_mean = N_sum / n_patches_to_use\n    sort_idx = np.argsort(ell)\n    ell = ell[sort_idx]\n    S_mean = S_mean[:, :, sort_idx]\n    N_mean = N_mean[:, :, sort_idx]\n    C_total = np.zeros((7, 7, n_ell))\n    C_total[:, :, :] = S_mean\n    C_total[:6, :6, :] += N_mean\n    C_obs = C_total[:6, :6, :]\n    C_cross = C_total[:6, 6, :]\n    epsilon = 1e-5\n    W = np.zeros((6, n_ell))\n    for k in range(n_ell):\n        C_k = C_obs[:, :, k]\n        reg_term = epsilon * np.diag(np.diag(C_k))\n        C_k_reg = C_k + reg_term\n        d = np.sqrt(np.diag(C_k_reg))\n        D_inv = np.diag(1.0 / d)\n        R_k = D_inv @ C_k_reg @ D_inv\n        inv_R_k = np.linalg.inv(R_k)\n        inv_C_k = D_inv @ inv_R_k @ D_inv\n        W[:, k] = inv_C_k @ C_cross[:, k]\n    out_filepath = 'data/mwf_weights.npz'\n    np.savez(out_filepath, W=W, ell=ell, C_total=C_total, S_mean=S_mean, N_mean=N_mean)\n    plt.rcParams['text.usetex'] = False\n    fig, axs = plt.subplots(1, 3, figsize=(18, 5))\n    channels = ['90 GHz', '150 GHz', '217 GHz', '353 GHz', '545 GHz', '857 GHz', 'tSZ']\n    for i in range(6):\n        axs[0].plot(ell, C_total[i, i, :], label=channels[i])\n    axs[0].set_yscale('log')\n    axs[0].set_xscale('log')\n    axs[0].set_xlabel('Multipole ell')\n    axs[0].set_ylabel('Power Spectrum C_ell [uK_CMB^2]')\n    axs[0].set_title('Frequency Auto-Spectra')\n    axs[0].legend(fontsize=8)\n    axs[0].grid(True, which='both', ls='--', alpha=0.5)\n    pairs_freq = [(0, 1, '90 x 150'), (1, 2, '150 x 217'), (3, 5, '353 x 857')]\n    for i, j, label in pairs_freq:\n        cross = C_total[i, j, :]\n        axs[1].plot(ell, np.abs(cross), label='|' + label + '|')\n    axs[1].set_yscale('log')\n    axs[1].set_xscale('log')\n    axs[1].set_xlabel('Multipole ell')\n    axs[1].set_ylabel('Absolute Power Spectrum |C_ell| [uK_CMB^2]')\n    axs[1].set_title('Frequency Cross-Spectra')\n    axs[1].legend(fontsize=8)\n    axs[1].grid(True, which='both', ls='--', alpha=0.5)\n    axs[2].plot(ell, C_total[6, 6, :], label='tSZ Auto (dimensionless)', color='black', linewidth=2)\n    pairs_tsz = [(0, 6, '90 x tSZ'), (1, 6, '150 x tSZ'), (5, 6, '857 x tSZ')]\n    for i, j, label in pairs_tsz:\n        cross = C_total[i, j, :]\n        axs[2].plot(ell, np.abs(cross), label='|' + label + '| (uK_CMB)')\n    axs[2].set_yscale('log')\n    axs[2].set_xscale('log')\n    axs[2].set_xlabel('Multipole ell')\n    axs[2].set_ylabel('Power Spectrum |C_ell|')\n    axs[2].set_title('tSZ Auto and Cross-Spectra')\n    axs[2].legend(fontsize=8)\n    axs[2].grid(True, which='both', ls='--', alpha=0.5)\n    fig.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot_filename = 'data/covariance_spectra_2_' + timestamp + '.png'\n    fig.savefig(plot_filename, dpi=300)\n    print('Diagnostic plot saved to ' + plot_filename)\n    print('Step 2 completed successfully. Output shape: ' + str(W.shape) + ', saved to ' + out_filepath)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-16 23:52:09",
+    "cost": {
+      "Agent": [
+        "engineer_response_evaluator",
+        "engineer_response_evaluator",
+        "engineer_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.006595750000000001,
+        0.015973750000000002,
+        0.02758375
+      ],
+      "Prompt Tokens": [
+        9679,
+        28375,
+        55759
+      ],
+      "Completion Tokens": [
+        2784,
+        5920,
+        9096
+      ],
+      "Total Tokens": [
+        12463,
+        34295,
+        64855
+      ]
+    }
+  },
+  {
+    "name": "executor",
+    "content": "Execution results:\n\nExecution output: \nDiagnostic plot saved to data/covariance_spectra_2_20260416_235216.png\nStep 2 completed successfully. Output shape: (6, 199), saved to data/mwf_weights.npz\n",
+    "timestamp": "2026-04-16 23:52:17",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "execution_recorder",
+    "content": "Code execution recorded.\n\nExecution output:\nExecution results:\n\nExecution output: \nDiagnostic plot saved to data/covariance_spectra_2_20260416_235216.png\nStep 2 completed successfully. Output shape: (6, 199), saved to data/mwf_weights.npz\n",
+    "timestamp": "2026-04-16 23:52:17",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "executor_response_evaluator",
+    "content": "",
+    "timestamp": "2026-04-16 23:52:17",
+    "cost": {
+      "Agent": [
+        "executor_response_evaluator",
+        "executor_response_evaluator",
+        "executor_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00023725000000000002,
+        0.000482,
+        0.00072675
+      ],
+      "Prompt Tokens": [
+        769,
+        1568,
+        2367
+      ],
+      "Completion Tokens": [
+        30,
+        60,
+        90
+      ],
+      "Total Tokens": [
+        799,
+        1628,
+        2457
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Code execution successful. 1 new image(s) generated.\n\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nWorkflow status:\n\nPlan step number: 2\n\nAgent for sub-task (might be different from the next agent suggestion for debugging): engineer\n\nStep status (before execution): in progress\n\nCode status: success\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n\nPlease review the generated images and provide feedback.",
+    "timestamp": "2026-04-16 23:52:17",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "image_reviewer",
+    "content": "[{'type': 'text', 'text': '**Needs Revision:** yes\\n\\n**Issues:**\\n- The y-axis label on the rightmost plot (\"tSZ Auto and Cross-Spectra\") is incorrect. It claims units of `[C_ell]`, but the legend correctly identifies that the tSZ auto-spectrum is dimensionless, while the cross-spectra are in `uK_CMB`. A single unit label for the axis is misleading.\\n- The y-axis label on the middle plot (\"Frequency Cross-Spectra\") has a typo: `[uK_CMB^2]` should be `[\u00b5K_CMB^2]`.\\n- The y-axis label on the leftmost plot (\"Frequency Auto-Spectra\") has a typo: `[uK_CMB^2]` should be `[\u00b5K_CMB^2]`.\\n\\n**Suggestions:**\\n- For the rightmost plot, change the y-axis label to something generic like \"Power Spectrum\" and rely on the legend to specify the units for each curve.\\n- Correct `uK_CMB^2` to `\u00b5K_CMB^2` in the y-axis labels of the left and middle plots.\\n\\n**Summary:**\\nThe plots provide a good diagnostic overview of the computed power spectra, but the y-axis labeling on the rightmost plot is scientifically inaccurate due to mixed units, and there are minor typos in the unit strings of the other plots. These need to be corrected.', 'extras': {'signature': 'EjQKMgEMOdbHYKKDWpw90l9+Z5QDNlTstfiNzHzku6P7dQfbjZtjfC7UFOtHJ7rsaR7iSEJr'}}]",
+    "timestamp": "2026-04-16 23:52:22",
+    "cost": {
+      "Agent": [
+        "image_reviewer",
+        "image_reviewer",
+        "image_reviewer"
+      ],
+      "Model": [
+        "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-image-preview"
+      ],
+      "Cost": [
+        0.0005759249999999999,
+        0.000558825,
+        0.000485325
+      ],
+      "Prompt Tokens": [
+        5251,
+        5251,
+        5251
+      ],
+      "Completion Tokens": [
+        607,
+        550,
+        305
+      ],
+      "Total Tokens": [
+        5858,
+        5801,
+        5556
+      ]
+    }
+  },
+  {
+    "name": "image_review_recorder",
+    "content": "",
+    "timestamp": "2026-04-16 23:52:23",
+    "cost": {
+      "Agent": [
+        "image_review_recorder",
+        "image_review_recorder",
+        "image_review_recorder"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00119475,
+        0.0018470000000000001,
+        0.00248725
+      ],
+      "Prompt Tokens": [
+        1035,
+        2006,
+        2731
+      ],
+      "Completion Tokens": [
+        624,
+        897,
+        1203
+      ],
+      "Total Tokens": [
+        1659,
+        2903,
+        3934
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Image review: Max attempts (2) reached. Step marked as complete.\n\nSummary: The plots provide a good diagnostic overview of the computed power spectra, but the y-axis labeling on the rightmost plot is scientifically inaccurate due to mixed units, and there are minor typos in the unit strings of the other plots. These need to be corrected.",
+    "timestamp": "2026-04-16 23:52:23",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "controller",
+    "content": "",
+    "timestamp": "2026-04-16 23:52:23",
+    "cost": {
+      "Agent": [
+        "controller"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0025162500000000003
+      ],
+      "Prompt Tokens": [
+        9951
+      ],
+      "Completion Tokens": [
+        19
+      ],
+      "Total Tokens": [
+        9970
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 2 out of 7.\n\n**Sub-task:** Covariance Estimation and MWF Construction\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Compute auto- and cross-power spectra for all 6 frequency channels and the tSZ ground truth on noise-injected observed maps using utils.powers with window_alpha=0.5.\n- Estimate noise power spectra separately from dedicated noise-only realizations and add them to the signal covariance.\n- Construct the (N_freq+1) x (N_freq+1) x N_ell covariance cube and the tSZ cross-vector.\n- Apply Tikhonov regularization, invert the matrices per ell-bin, and save the resulting per-ell Wiener filter weights to disk.\n- Produce a diagnostic plot of the diagonal auto-spectra and selected off-diagonal cross-spectra.\n\n**Step status:** in progress \u23f3\n\n**Code status:** success\n\n**Step iteration:** 0/10\n        ",
+    "timestamp": "2026-04-16 23:52:23",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "engineer",
+    "content": "**Code Explanation:**\n\nThe script computes the auto- and cross-power spectra for the 6 frequency channels and the tSZ ground truth to construct the Multi-Frequency Wiener Filter (MWF). The signal covariance ($S_\\ell$) is computed from the signal-only `stacked_*.npy` maps, and the noise covariance ($N_\\ell$) is computed separately from the noise realizations. The total observed covariance is then constructed as $C_{\\text{obs}} = S_\\ell + N_\\ell$. The computation is parallelized across 16 workers over a representative subset of 500 patches. `mmap_mode='r'` is used extensively to ensure memory efficiency.\n\nTo handle the extreme $10^{15}$ dynamic range disparity between the tSZ and 857 GHz CIB signals, Tikhonov regularization is applied by adding a small fraction ($\\epsilon = 10^{-5}$) of the variance to the diagonal of the covariance matrix. Furthermore, before inversion, the covariance matrix is normalized into a correlation matrix ($R_\\ell = D^{-1} C_\\ell D^{-1}$), inverted, and then de-normalized. This guarantees numerical stability. The resulting per-$\\ell$ Wiener filter weights $W_\\ell = C_{\\text{obs}}^{-1} C_{\\text{cross}}$ are saved to disk alongside the covariance matrices.\n\nA diagnostic plot of the auto- and selected cross-spectra is generated to verify the spectral structure. The y-axis labels have been updated to use the correct `\u00b5K_CMB^2` units, and the third panel's y-axis label has been simplified to avoid confusion with units, relying on the legend to specify the mixed units (dimensionless and `\u00b5K_CMB`).\n\n**Modifications:**\n- Corrected `uK_CMB^2` to `\u00b5K_CMB^2` in the y-axis labels of the left and middle plots.\n- Simplified the y-axis label of the rightmost plot to `Absolute Power Spectrum` to avoid confusion, as the legend explicitly states the units for each curve.\n\n**Python Code:**\n\n```python\nimport sys\nimport os\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nimport multiprocessing as mp\n\n# Ensure codebase is in path\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, '/home/node/data/compsep_data')\nimport utils\n\ndef get_planck_noise(freq, i_planck, i_patch, base_path):\n    \"\"\"\n    Loads a specific patch from the Planck noise MC realizations.\n    Uses mmap_mode='r' to avoid loading the entire 1523-patch array into memory.\n    \"\"\"\n    filepath = base_path + '/planck_noise/planck_noise_' + str(freq) + '_' + str(i_planck) + '.npy'\n    data = np.load(filepath, mmap_mode='r')\n    return data[i_patch]\n\ndef process_patch(args):\n    \"\"\"\n    Worker function to compute signal and noise power spectra for a single patch.\n    Returns the 7x7 signal covariance S, the 6x6 noise covariance N, and the multipole bins ell.\n    \"\"\"\n    i_patch, i_so, i_planck, base_dir = args\n    \n    # Load signal maps (CMB + tSZ + kSZ + CIB)\n    s_90 = np.load(base_dir + '/stacked_90.npy', mmap_mode='r')[i_patch]\n    s_150 = np.load(base_dir + '/stacked_150.npy', mmap_mode='r')[i_patch]\n    s_217 = np.load(base_dir + '/stacked_217.npy', mmap_mode='r')[i_patch]\n    s_353 = np.load(base_dir + '/stacked_353.npy', mmap_mode='r')[i_patch]\n    s_545 = np.load(base_dir + '/stacked_545.npy', mmap_mode='r')[i_patch]\n    s_857 = np.load(base_dir + '/stacked_857.npy', mmap_mode='r')[i_patch]\n    tsz = np.load(base_dir + '/tsz.npy', mmap_mode='r')[i_patch]\n    \n    signals = [s_90, s_150, s_217, s_353, s_545, s_857, tsz]\n    \n    # Load noise maps\n    n_90 = np.load(base_dir + '/so_noise/90.npy', mmap_mode='r')[i_so]\n    n_150 = np.load(base_dir + '/so_noise/150.npy', mmap_mode='r')[i_so]\n    n_217 = np.load(base_dir + '/so_noise/217.npy', mmap_mode='r')[i_so]\n    \n    pn_353_raw = get_planck_noise(353, i_planck, i_patch, base_dir)\n    pn_545_raw = get_planck_noise(545, i_planck, i_patch, base_dir)\n    pn_857_raw = get_planck_noise(857, i_planck, i_patch, base_dir)\n    \n    # Convert Planck noise to uK_CMB\n    n_353 = pn_353_raw * 1e6\n    n_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)\n    n_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)\n    \n    noises = [n_90, n_150, n_217, n_353, n_545, n_857]\n    \n    # Pixel size in arcmin (5 degrees / 256 pixels)\n    ps_val = 300.0 / 256.0\n    \n    # Get ell bins (utils.powers returns cl, ell)\n    cl, ell = utils.powers(signals[0], signals[0], ps=ps_val, window_alpha=0.5)\n    n_ell = len(ell)\n    \n    # Compute 7x7 signal covariance (6 frequencies + tSZ)\n    S = np.zeros((7, 7, n_ell))\n    for i in range(7):\n        for j in range(i, 7):\n            cl, _ = utils.powers(signals[i], signals[j], ps=ps_val, window_alpha=0.5)\n            S[i, j] = cl\n            if i != j:\n                S[j, i] = cl\n                \n    # Compute 6x6 noise covariance\n    N = np.zeros((6, 6, n_ell))\n    for i in range(6):\n        for j in range(i, 6):\n            # Only compute auto-spectra and known correlated cross-spectra (SO 90 and 150)\n            if i == j or (i == 0 and j == 1):\n                cl, _ = utils.powers(noises[i], noises[j], ps=ps_val, window_alpha=0.5)\n                N[i, j] = cl\n                if i != j:\n                    N[j, i] = cl\n                    \n    return S, N, ell\n\ndef main():\n    # Limit OpenBLAS threads to avoid oversubscription with multiprocessing\n    os.environ['OMP_NUM_THREADS'] = '1'\n    \n    print('--------------------------------------------------')\n    print('Verifying utils.powers estimator...')\n    noise_map = np.random.normal(0, 1, (256, 256))\n    cl_test, ell_test = utils.powers(noise_map, noise_map, ps=300.0/256.0, window_alpha=0.5)\n    pixel_area_sr = ( (300.0/256.0) / 60.0 * np.pi / 180.0 )**2\n    print('White noise power spectrum verification:')\n    print('Expected C_ell: ' + np.format_float_scientific(pixel_area_sr, precision=4))\n    print('Measured C_ell (mean): ' + np.format_float_scientific(np.mean(cl_test), precision=4))\n    print('Ratio (Measured/Expected): ' + str(round(np.mean(cl_test) / pixel_area_sr, 4)))\n    print('--------------------------------------------------')\n    \n    base_dir = '/home/node/data/compsep_data/cut_maps'\n    n_patch_total = 1523\n    n_patches_to_use = 500\n    \n    rng = np.random.default_rng(seed=42)\n    patch_indices = rng.choice(n_patch_total, size=n_patches_to_use, replace=False)\n    i_so_indices = rng.integers(0, 3000, size=n_patch_total)\n    i_planck_indices = rng.integers(0, 100, size=n_patch_total)\n    \n    args_list = [(p, i_so_indices[p], i_planck_indices[p], base_dir) for p in patch_indices]\n    \n    print('Starting covariance estimation on ' + str(n_patches_to_use) + ' patches using 16 workers...')\n    \n    num_workers = 16\n    with mp.Pool(processes=num_workers) as pool:\n        results = pool.map(process_patch, args_list)\n        \n    print('Finished computing power spectra. Aggregating results...')\n    \n    ell = results[0][2]\n    n_ell = len(ell)\n    \n    S_sum = np.zeros((7, 7, n_ell))\n    N_sum = np.zeros((6, 6, n_ell))\n    \n    for S, N, _ in results:\n        S_sum += S\n        N_sum += N\n        \n    S_mean = S_sum / n_patches_to_use\n    N_mean = N_sum / n_patches_to_use\n    \n    # Sort by ell to ensure monotonic plotting and correct MWF application\n    sort_idx = np.argsort(ell)\n    ell = ell[sort_idx]\n    S_mean = S_mean[:, :, sort_idx]\n    N_mean = N_mean[:, :, sort_idx]\n    \n    # Construct total covariance: C_total = S + N\n    C_total = np.zeros((7, 7, n_ell))\n    C_total[:, :, :] = S_mean\n    C_total[:6, :6, :] += N_mean\n    \n    C_obs = C_total[:6, :6, :]\n    C_cross = C_total[:6, 6, :]\n    \n    epsilon = 1e-5\n    print('--------------------------------------------------')\n    print('Condition number of C_obs at ell bin 10 before regularization: ' + np.format_float_scientific(np.linalg.cond(C_obs[:, :, 10]), precision=2))\n    C_k_test = C_obs[:, :, 10] + epsilon * np.diag(np.diag(C_obs[:, :, 10]))\n    print('Condition number of C_obs at ell bin 10 after regularization: ' + np.format_float_scientific(np.linalg.cond(C_k_test), precision=2))\n    d_test = np.sqrt(np.diag(C_k_test))\n    D_inv_test = np.diag(1.0 / d_test)\n    R_k_test = D_inv_test @ C_k_test @ D_inv_test\n    print('Condition number of correlation matrix R_k at ell bin 10: ' + np.format_float_scientific(np.linalg.cond(R_k_test), precision=2))\n    print('--------------------------------------------------')\n    \n    print('Applying Tikhonov regularization and computing Wiener filter weights...')\n    W = np.zeros((6, n_ell))\n    \n    for k in range(n_ell):\n        C_k = C_obs[:, :, k]\n        \n        # Tikhonov regularization scaled by variance\n        reg_term = epsilon * np.diag(np.diag(C_k))\n        C_k_reg = C_k + reg_term\n        \n        # Normalize to correlation matrix for stable inversion\n        d = np.sqrt(np.diag(C_k_reg))\n        D_inv = np.diag(1.0 / d)\n        \n        R_k = D_inv @ C_k_reg @ D_inv\n        inv_R_k = np.linalg.inv(R_k)\n        \n        # De-normalize back to covariance scale\n        inv_C_k = D_inv @ inv_R_k @ D_inv\n        \n        # Compute MWF weights\n        W[:, k] = inv_C_k @ C_cross[:, k]\n        \n    out_filepath = 'data/mwf_weights.npz'\n    np.savez(out_filepath, W=W, ell=ell, C_total=C_total, S_mean=S_mean, N_mean=N_mean)\n    print('Saved Wiener filter weights and covariance to ' + out_filepath)\n    \n    print('Generating diagnostic plot...')\n    plt.rcParams['text.usetex'] = False\n    fig, axs = plt.subplots(1, 3, figsize=(18, 5))\n    \n    channels = ['90 GHz', '150 GHz', '217 GHz', '353 GHz', '545 GHz', '857 GHz', 'tSZ']\n    \n    # Panel 1: Auto-spectra of frequency channels\n    for i in range(6):\n        axs[0].plot(ell, C_total[i, i, :], label=channels[i])\n    axs[0].set_yscale('log')\n    axs[0].set_xscale('log')\n    axs[0].set_xlabel('Multipole ell')\n    axs[0].set_ylabel('Power Spectrum C_ell [\u00b5K_CMB^2]')\n    axs[0].set_title('Frequency Auto-Spectra')\n    axs[0].legend(fontsize=8)\n    axs[0].grid(True, which='both', ls='--', alpha=0.5)\n    \n    # Panel 2: Frequency Cross-spectra\n    pairs_freq = [(0, 1, '90 x 150'), (1, 2, '150 x 217'), (3, 5, '353 x 857')]\n    for i, j, label in pairs_freq:\n        cross = C_total[i, j, :]\n        axs[1].plot(ell, np.abs(cross), label='|' + label + '|')\n        \n    axs[1].set_yscale('log')\n    axs[1].set_xscale('log')\n    axs[1].set_xlabel('Multipole ell')\n    axs[1].set_ylabel('Absolute Power Spectrum |C_ell| [\u00b5K_CMB^2]')\n    axs[1].set_title('Frequency Cross-Spectra')\n    axs[1].legend(fontsize=8)\n    axs[1].grid(True, which='both', ls='--', alpha=0.5)\n    \n    # Panel 3: tSZ Auto and Cross-spectra\n    axs[2].plot(ell, C_total[6, 6, :], label='tSZ Auto (dimensionless)', color='black', linewidth=2)\n    pairs_tsz = [(0, 6, '90 x tSZ'), (1, 6, '150 x tSZ'), (5, 6, '857 x tSZ')]\n    for i, j, label in pairs_tsz:\n        cross = C_total[i, j, :]\n        axs[2].plot(ell, np.abs(cross), label='|' + label + '| (\u00b5K_CMB)')\n        \n    axs[2].set_yscale('log')\n    axs[2].set_xscale('log')\n    axs[2].set_xlabel('Multipole ell')\n    axs[2].set_ylabel('Absolute Power Spectrum')\n    axs[2].set_title('tSZ Auto and Cross-Spectra')\n    axs[2].legend(fontsize=8)\n    axs[2].grid(True, which='both', ls='--', alpha=0.5)\n    \n    fig.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot_filename = 'data/covariance_spectra_2_' + timestamp + '.png'\n    fig.savefig(plot_filename, dpi=300)\n    print('Diagnostic plot saved to ' + plot_filename)\n    \n    print('Step 2 completed successfully. Output shape: ' + str(W.shape) + ', saved to ' + out_filepath)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-16 23:52:49",
+    "cost": {
+      "Agent": [
+        "engineer",
+        "engineer",
+        "engineer",
+        "engineer"
+      ],
+      "Model": [
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview"
+      ],
+      "Cost": [
+        0.077102,
+        0.17664800000000003,
+        0.29387,
+        0.42832800000000004
+      ],
+      "Prompt Tokens": [
+        16585,
+        41746,
+        75565,
+        117972
+      ],
+      "Completion Tokens": [
+        3661,
+        7763,
+        11895,
+        16032
+      ],
+      "Total Tokens": [
+        20246,
+        49509,
+        87460,
+        134004
+      ]
+    }
+  },
+  {
+    "name": "engineer_response_evaluator",
+    "content": "**Code Explanation:**\n\nThe script computes the auto- and cross-power spectra for the 6 frequency channels and the tSZ ground truth to construct the Multi-Frequency Wiener Filter (MWF). The signal covariance (S_ell) is computed from the signal-only stacked_*.npy maps, and the noise covariance (N_ell) is computed separately from the noise realizations. The total observed covariance is then constructed as C_obs = S_ell + N_ell. The computation is parallelized across 16 workers over a representative subset of 500 patches. mmap_mode='r' is used extensively to ensure memory efficiency. To handle the extreme 10^15 dynamic range disparity between the tSZ and 857 GHz CIB signals, Tikhonov regularization is applied by adding a small fraction (epsilon = 10^-5) of the variance to the diagonal of the covariance matrix. Furthermore, before inversion, the covariance matrix is normalized into a correlation matrix (R_ell = D^-1 C_ell D^-1), inverted, and then de-normalized. This guarantees numerical stability. The resulting per-ell Wiener filter weights W_ell = C_obs^-1 C_cross are saved to disk alongside the covariance matrices. A diagnostic plot of the auto- and selected cross-spectra is generated to verify the spectral structure. The third panel of the plot has been updated to clarify the units of the tSZ auto-spectrum (dimensionless) and the cross-spectra (\u00b5K_CMB).\n\n**Modifications:**\n\nCorrected uK_CMB^2 to \u00b5K_CMB^2 in the y-axis labels of the left and middle plots. Simplified the y-axis label of the rightmost plot to Absolute Power Spectrum to avoid confusion, as the legend explicitly states the units for each curve.\n\n**Python Code:**\n\n```python\n# filename: codebase/step_2.py\nimport sys\nimport os\nsys.path.insert(0, os.path.abspath(\"codebase\"))\nsys.path.insert(0, \"/home/node/data/compsep_data/\")\nsys.path.insert(0, '/home/node/data/compsep_data')\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom datetime import datetime\nimport multiprocessing as mp\nimport utils\n\ndef get_planck_noise(freq, i_planck, i_patch, base_path):\n    filepath = base_path + '/planck_noise/planck_noise_' + str(freq) + '_' + str(i_planck) + '.npy'\n    data = np.load(filepath, mmap_mode='r')\n    return data[i_patch]\n\ndef process_patch(args):\n    i_patch, i_so, i_planck, base_dir = args\n    s_90 = np.load(base_dir + '/stacked_90.npy', mmap_mode='r')[i_patch]\n    s_150 = np.load(base_dir + '/stacked_150.npy', mmap_mode='r')[i_patch]\n    s_217 = np.load(base_dir + '/stacked_217.npy', mmap_mode='r')[i_patch]\n    s_353 = np.load(base_dir + '/stacked_353.npy', mmap_mode='r')[i_patch]\n    s_545 = np.load(base_dir + '/stacked_545.npy', mmap_mode='r')[i_patch]\n    s_857 = np.load(base_dir + '/stacked_857.npy', mmap_mode='r')[i_patch]\n    tsz = np.load(base_dir + '/tsz.npy', mmap_mode='r')[i_patch]\n    signals = [s_90, s_150, s_217, s_353, s_545, s_857, tsz]\n    n_90 = np.load(base_dir + '/so_noise/90.npy', mmap_mode='r')[i_so]\n    n_150 = np.load(base_dir + '/so_noise/150.npy', mmap_mode='r')[i_so]\n    n_217 = np.load(base_dir + '/so_noise/217.npy', mmap_mode='r')[i_so]\n    pn_353_raw = get_planck_noise(353, i_planck, i_patch, base_dir)\n    pn_545_raw = get_planck_noise(545, i_planck, i_patch, base_dir)\n    pn_857_raw = get_planck_noise(857, i_planck, i_patch, base_dir)\n    n_353 = pn_353_raw * 1e6\n    n_545 = pn_545_raw * 1e6 * utils.jysr2uk(545)\n    n_857 = pn_857_raw * 1e6 * utils.jysr2uk(857)\n    noises = [n_90, n_150, n_217, n_353, n_545, n_857]\n    ps_val = 300.0 / 256.0\n    cl, ell = utils.powers(signals[0], signals[0], ps=ps_val, window_alpha=0.5)\n    n_ell = len(ell)\n    S = np.zeros((7, 7, n_ell))\n    for i in range(7):\n        for j in range(i, 7):\n            cl, _ = utils.powers(signals[i], signals[j], ps=ps_val, window_alpha=0.5)\n            S[i, j] = cl\n            if i != j:\n                S[j, i] = cl\n    N = np.zeros((6, 6, n_ell))\n    for i in range(6):\n        for j in range(i, 6):\n            if i == j or (i == 0 and j == 1):\n                cl, _ = utils.powers(noises[i], noises[j], ps=ps_val, window_alpha=0.5)\n                N[i, j] = cl\n                if i != j:\n                    N[j, i] = cl\n    return S, N, ell\n\ndef main():\n    os.environ['OMP_NUM_THREADS'] = '1'\n    base_dir = '/home/node/data/compsep_data/cut_maps'\n    n_patch_total = 1523\n    n_patches_to_use = 500\n    rng = np.random.default_rng(seed=42)\n    patch_indices = rng.choice(n_patch_total, size=n_patches_to_use, replace=False)\n    i_so_indices = rng.integers(0, 3000, size=n_patch_total)\n    i_planck_indices = rng.integers(0, 100, size=n_patch_total)\n    args_list = [(p, i_so_indices[p], i_planck_indices[p], base_dir) for p in patch_indices]\n    num_workers = 16\n    with mp.Pool(processes=num_workers) as pool:\n        results = pool.map(process_patch, args_list)\n    ell = results[0][2]\n    n_ell = len(ell)\n    S_sum = np.zeros((7, 7, n_ell))\n    N_sum = np.zeros((6, 6, n_ell))\n    for S, N, _ in results:\n        S_sum += S\n        N_sum += N\n    S_mean = S_sum / n_patches_to_use\n    N_mean = N_sum / n_patches_to_use\n    sort_idx = np.argsort(ell)\n    ell = ell[sort_idx]\n    S_mean = S_mean[:, :, sort_idx]\n    N_mean = N_mean[:, :, sort_idx]\n    C_total = np.zeros((7, 7, n_ell))\n    C_total[:, :, :] = S_mean\n    C_total[:6, :6, :] += N_mean\n    C_obs = C_total[:6, :6, :]\n    C_cross = C_total[:6, 6, :]\n    epsilon = 1e-5\n    W = np.zeros((6, n_ell))\n    for k in range(n_ell):\n        C_k = C_obs[:, :, k]\n        reg_term = epsilon * np.diag(np.diag(C_k))\n        C_k_reg = C_k + reg_term\n        d = np.sqrt(np.diag(C_k_reg))\n        D_inv = np.diag(1.0 / d)\n        R_k = D_inv @ C_k_reg @ D_inv\n        inv_R_k = np.linalg.inv(R_k)\n        inv_C_k = D_inv @ inv_R_k @ D_inv\n        W[:, k] = inv_C_k @ C_cross[:, k]\n    out_filepath = 'data/mwf_weights.npz'\n    np.savez(out_filepath, W=W, ell=ell, C_total=C_total, S_mean=S_mean, N_mean=N_mean)\n    plt.rcParams['text.usetex'] = False\n    fig, axs = plt.subplots(1, 3, figsize=(18, 5))\n    channels = ['90 GHz', '150 GHz', '217 GHz', '353 GHz', '545 GHz', '857 GHz', 'tSZ']\n    for i in range(6):\n        axs[0].plot(ell, C_total[i, i, :], label=channels[i])\n    axs[0].set_yscale('log')\n    axs[0].set_xscale('log')\n    axs[0].set_xlabel('Multipole ell')\n    axs[0].set_ylabel('Power Spectrum C_ell [\u00b5K_CMB^2]')\n    axs[0].set_title('Frequency Auto-Spectra')\n    axs[0].legend(fontsize=8)\n    axs[0].grid(True, which='both', ls='--', alpha=0.5)\n    pairs_freq = [(0, 1, '90 x 150'), (1, 2, '150 x 217'), (3, 5, '353 x 857')]\n    for i, j, label in pairs_freq:\n        cross = C_total[i, j, :]\n        axs[1].plot(ell, np.abs(cross), label='|' + label + '|')\n    axs[1].set_yscale('log')\n    axs[1].set_xscale('log')\n    axs[1].set_xlabel('Multipole ell')\n    axs[1].set_ylabel('Absolute Power Spectrum |C_ell| [\u00b5K_CMB^2]')\n    axs[1].set_title('Frequency Cross-Spectra')\n    axs[1].legend(fontsize=8)\n    axs[1].grid(True, which='both', ls='--', alpha=0.5)\n    axs[2].plot(ell, C_total[6, 6, :], label='tSZ Auto (dimensionless)', color='black', linewidth=2)\n    pairs_tsz = [(0, 6, '90 x tSZ'), (1, 6, '150 x tSZ'), (5, 6, '857 x tSZ')]\n    for i, j, label in pairs_tsz:\n        cross = C_total[i, j, :]\n        axs[2].plot(ell, np.abs(cross), label='|' + label + '| (\u00b5K_CMB)')\n    axs[2].set_yscale('log')\n    axs[2].set_xscale('log')\n    axs[2].set_xlabel('Multipole ell')\n    axs[2].set_ylabel('Absolute Power Spectrum')\n    axs[2].set_title('tSZ Auto and Cross-Spectra')\n    axs[2].legend(fontsize=8)\n    axs[2].grid(True, which='both', ls='--', alpha=0.5)\n    fig.tight_layout()\n    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')\n    plot_filename = 'data/covariance_spectra_2_' + timestamp + '.png'\n    fig.savefig(plot_filename, dpi=300)\n    print('Diagnostic plot saved to ' + plot_filename)\n    print('Step 2 completed successfully. Output shape: ' + str(W.shape) + ', saved to ' + out_filepath)\n\nif __name__ == '__main__':\n    main()\n```",
+    "timestamp": "2026-04-16 23:52:56",
+    "cost": {
+      "Agent": [
+        "engineer_response_evaluator",
+        "engineer_response_evaluator",
+        "engineer_response_evaluator",
+        "engineer_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.006595750000000001,
+        0.015973750000000002,
+        0.02758375,
+        0.04130375
+      ],
+      "Prompt Tokens": [
+        9679,
+        28375,
+        55759,
+        91685
+      ],
+      "Completion Tokens": [
+        2784,
+        5920,
+        9096,
+        12255
+      ],
+      "Total Tokens": [
+        12463,
+        34295,
+        64855,
+        103940
+      ]
+    }
+  },
+  {
+    "name": "executor",
+    "content": "Execution results:\n\nExecution output: \nDiagnostic plot saved to data/covariance_spectra_2_20260416_235303.png\nStep 2 completed successfully. Output shape: (6, 199), saved to data/mwf_weights.npz\n",
+    "timestamp": "2026-04-16 23:53:04",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "execution_recorder",
+    "content": "Code execution recorded.\n\nExecution output:\nExecution results:\n\nExecution output: \nDiagnostic plot saved to data/covariance_spectra_2_20260416_235303.png\nStep 2 completed successfully. Output shape: (6, 199), saved to data/mwf_weights.npz\n",
+    "timestamp": "2026-04-16 23:53:04",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "executor_response_evaluator",
+    "content": "",
+    "timestamp": "2026-04-16 23:53:04",
+    "cost": {
+      "Agent": [
+        "executor_response_evaluator",
+        "executor_response_evaluator",
+        "executor_response_evaluator",
+        "executor_response_evaluator"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00023725000000000002,
+        0.000482,
+        0.00072675,
+        0.0009714999999999999
+      ],
+      "Prompt Tokens": [
+        769,
+        1568,
+        2367,
+        3166
+      ],
+      "Completion Tokens": [
+        30,
+        60,
+        90,
+        120
+      ],
+      "Total Tokens": [
+        799,
+        1628,
+        2457,
+        3286
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Code execution successful. 1 new image(s) generated.\n\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\nWorkflow status:\n\nPlan step number: 2\n\nAgent for sub-task (might be different from the next agent suggestion for debugging): engineer\n\nStep status (before execution): in progress\n\nCode status: success\n\nxxxxxxxxxxxxxxxxxxxxxxxxxx\n\n\nPlease review the generated images and provide feedback.",
+    "timestamp": "2026-04-16 23:53:04",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "image_reviewer",
+    "content": "[{'type': 'text', 'text': '**Needs Revision:** yes\\n\\n**Issues:**\\n- The y-axis label for the third panel (\"tSZ Auto and Cross-Spectra\") is generic (\"Absolute Power Spectrum\") and does not specify the units, which are mixed (dimensionless for tSZ auto, \u00b5K_CMB for cross-spectra).\\n- The legend in the third panel is slightly overlapping with the data lines at very low multipoles (ell < 200).\\n\\n**Suggestions:**\\n- Update the y-axis label for the third panel to explicitly state the mixed units, for example: \"Absolute Power Spectrum [dimensionless or \u00b5K_CMB]\".\\n- Adjust the legend position in the third panel (e.g., to \\'lower left\\' or \\'best\\') to avoid overlap with the data.\\n\\n**Summary:**\\nThe diagnostic plots are scientifically accurate and clearly show the expected signal and noise properties across frequencies and for the tSZ component. However, the third panel requires improved labeling for mixed units and a minor legend adjustment to ensure full readability.', 'extras': {'signature': 'EjQKMgEMOdbHHKGe6fSvER2g7xCHzdpvR7iK59T6ZK8kvOaWOkWBQ8h3Fy5pJP4d5P/VRJ5+'}}]",
+    "timestamp": "2026-04-16 23:53:08",
+    "cost": {
+      "Agent": [
+        "image_reviewer",
+        "image_reviewer",
+        "image_reviewer",
+        "image_reviewer"
+      ],
+      "Model": [
+        "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-image-preview",
+        "gemini-3.1-flash-image-preview"
+      ],
+      "Cost": [
+        0.0005759249999999999,
+        0.000558825,
+        0.000485325,
+        0.000458025
+      ],
+      "Prompt Tokens": [
+        5251,
+        5251,
+        5251,
+        5251
+      ],
+      "Completion Tokens": [
+        607,
+        550,
+        305,
+        214
+      ],
+      "Total Tokens": [
+        5858,
+        5801,
+        5556,
+        5465
+      ]
+    }
+  },
+  {
+    "name": "image_review_recorder",
+    "content": "",
+    "timestamp": "2026-04-16 23:53:09",
+    "cost": {
+      "Agent": [
+        "image_review_recorder",
+        "image_review_recorder",
+        "image_review_recorder",
+        "image_review_recorder"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.00119475,
+        0.0018470000000000001,
+        0.00248725,
+        0.0029879999999999998
+      ],
+      "Prompt Tokens": [
+        1035,
+        2006,
+        2731,
+        3372
+      ],
+      "Completion Tokens": [
+        624,
+        897,
+        1203,
+        1430
+      ],
+      "Total Tokens": [
+        1659,
+        2903,
+        3934,
+        4802
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "Image review: Max attempts (2) reached. Step marked as complete.\n\nSummary: The diagnostic plots are scientifically accurate and clearly show the expected signal and noise properties across frequencies and for the tSZ component. However, the third panel requires improved labeling for mixed units and a minor legend adjustment to ensure full readability.",
+    "timestamp": "2026-04-16 23:53:09",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "controller",
+    "content": "",
+    "timestamp": "2026-04-16 23:53:10",
+    "cost": {
+      "Agent": [
+        "controller",
+        "controller"
+      ],
+      "Model": [
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-flash-lite-preview"
+      ],
+      "Cost": [
+        0.0025162500000000003,
+        0.0024850000000000002
+      ],
+      "Prompt Tokens": [
+        9951,
+        9832
+      ],
+      "Completion Tokens": [
+        19,
+        18
+      ],
+      "Total Tokens": [
+        9970,
+        9850
+      ]
+    }
+  },
+  {
+    "name": "_Group_Tool_Executor",
+    "content": "\n**Step number:** 2 out of 7.\n\n**Sub-task:** Covariance Estimation and MWF Construction\n\n**Agent in charge of sub-task:** `engineer`\n\n**Instructions:**\n\n- Compute auto- and cross-power spectra for all 6 frequency channels and the tSZ ground truth on noise-injected observed maps using utils.powers with window_alpha=0.5.\n- Estimate noise power spectra separately from dedicated noise-only realizations and add them to the signal covariance.\n- Construct the (N_freq+1) x (N_freq+1) x N_ell covariance cube and the tSZ cross-vector.\n- Apply Tikhonov regularization, invert the matrices per ell-bin, and save the resulting per-ell Wiener filter weights to disk.\n- Produce a diagnostic plot of the diagonal auto-spectra and selected off-diagonal cross-spectra.\n\n**Step status:** completed \u2705\n\n**Code status:** success\n\n**Step iteration:** 0/10\n        ",
+    "timestamp": "2026-04-16 23:53:10",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  },
+  {
+    "name": "terminator",
+    "content": "TERMINATE",
+    "timestamp": "2026-04-16 23:53:10",
+    "cost": {
+      "Agent": [],
+      "Model": [],
+      "Cost": [],
+      "Prompt Tokens": [],
+      "Completion Tokens": [],
+      "Total Tokens": []
+    }
+  }
+]
